@@ -1,0 +1,8 @@
+{
+  "name": "Company Hero Performance Dashboard",
+  "description": "Dashboard interativo de monitoramento de chamados e performance de suporte seguindo a identidade visual da Company Hero.",
+  "requestFramePermissions": [],
+  "majorCapabilities": [
+    "MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"
+  ]
+}

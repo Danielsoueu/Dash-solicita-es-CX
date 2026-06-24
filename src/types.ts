@@ -1,0 +1,30 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+export interface ChatMessage {
+  sender: 'cliente' | 'hero_agent';
+  text: string;
+  timestamp: string;
+}
+
+export interface Ticket {
+  id: string; // unique code or row index
+  clientName: string;
+  phone: string;
+  iuguUrl: string;
+  urgency: string; // Dynamic: 'Baixa' | 'Média' | 'Alta' | 'Dúvida' | 'Urgente'
+  team: string; // Dynamic parsed team (e.g. 'Cobrança', 'Renovação', 'Retenção', etc.)
+  description: string; // "Solicitação"
+  arquivos: string;
+  agentName: string; // "Quem enviou"
+  createdAt: string; // ISO string
+  chatLog: ChatMessage[];
+  keyWords: string[];
+}
+
+export interface WordCloudItem {
+  text: string;
+  value: number;
+}
