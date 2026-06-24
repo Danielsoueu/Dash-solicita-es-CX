@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect } from 'react';
+import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { motion } from 'motion/react';
 import { 
   Search, 
@@ -22,7 +22,8 @@ import {
   Wifi,
   WifiOff,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  Tv
 } from 'lucide-react';
 import { Ticket } from './types';
 import { INITIAL_TICKETS } from './data';
@@ -49,6 +50,9 @@ export default function App() {
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedPriority, setSelectedPriority] = useState<string | null>(null);
+  const [showOnlyRecurring, setShowOnlyRecurring] = useState(false);
+  const [isTvMode, setIsTvMode] = useState(false);
   
   // Selected Ticket for Modal Details
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -78,10 +82,58 @@ export default function App() {
     return name.trim();
   };
 
+  // Helper to highlight terms matching search query in ticket descriptions
+  const highlightText = (text: string, search: string) => {
+    if (!search.trim()) return <span>{text}</span>;
+    try {
+      const escapedSearch = search.replace(/[-[\]{}()*+?.,\\^$|#\s]/g, '\\$&');
+      const regex = new RegExp(`(${escapedSearch})`, 'gi');
+      const parts = text.split(regex);
+      return (
+        <span>
+          {parts.map((part, index) => 
+            regex.test(part) ? (
+              <mark key={index} className="bg-yellow-100 text-yellow-900 font-semibold px-0.5 rounded-xs">
+                {part}
+              </mark>
+            ) : (
+              part
+            )
+          )}
+        </span>
+      );
+    } catch (e) {
+      return <span>{text}</span>;
+    }
+  };
+
+  // TV Wallboard scroll effect
+  const tvScrollRef = useRef<HTMLDivElement>(null);
+  useEffect(() => {
+    if (!isTvMode) return;
+    const container = tvScrollRef.current;
+    if (!container) return;
+    let animationFrameId: number;
+    let lastTime = performance.now();
+    const scroll = (now: number) => {
+      if (container) {
+        const delta = (now - lastTime) / 1000;
+        container.scrollTop += 25 * delta;
+        if (container.scrollTop + container.clientHeight >= container.scrollHeight - 5) {
+          container.scrollTop = 0;
+        }
+      }
+      lastTime = now;
+      animationFrameId = requestAnimationFrame(scroll);
+    };
+    animationFrameId = requestAnimationFrame(scroll);
+    return () => cancelAnimationFrame(animationFrameId);
+  }, [isTvMode, tickets]);
+
   // Reset pagination to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth]);
+  }, [searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth, selectedPriority, showOnlyRecurring]);
 
   // Fetch spreadsheet data at startup
   useEffect(() => {
@@ -239,6 +291,16 @@ export default function App() {
         }
       }
 
+      // 5.5. Priority Filter
+      if (selectedPriority && ticket.urgency !== selectedPriority) {
+        return false;
+      }
+
+      // 5.6. Show Only Recurring Clients Filter
+      if (showOnlyRecurring && !recurringClients.has(ticket.clientName?.trim().toUpperCase())) {
+        return false;
+      }
+
       // 6. Text Search Filter
       if (searchTerm.trim() !== '') {
         const searchLower = searchTerm.toLowerCase();
@@ -254,18 +316,23 @@ export default function App() {
 
       return true;
     });
-  }, [tickets, searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth]);
+  }, [tickets, searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth, selectedPriority, showOnlyRecurring, recurringClients]);
 
-  // Derived Performance Metrics (no SLA/CSAT as requested)
+  // Derived Performance Metrics (including Recurrence Rate)
   const metrics = useMemo(() => {
     const totalCount = filteredTickets.length;
     const urgentCount = filteredTickets.filter(t => t.urgency === 'Crítica' || t.urgency === 'Alta').length;
     
+    const uniqueFilteredClients = Array.from(new Set(filteredTickets.map(t => t.clientName?.trim().toUpperCase()).filter(Boolean)));
+    const recurringFilteredCount = uniqueFilteredClients.filter(name => recurringClients.has(name)).length;
+    const recurrenceRate = uniqueFilteredClients.length > 0 ? Math.round((recurringFilteredCount / uniqueFilteredClients.length) * 100) : 0;
+
     return {
       totalCount,
-      urgentCount
+      urgentCount,
+      recurrenceRate
     };
-  }, [filteredTickets]);
+  }, [filteredTickets, recurringClients]);
 
   // Separating filtered tickets to fetch Urgent Feed
   const urgentTickets = useMemo(() => {
@@ -298,9 +365,181 @@ export default function App() {
     setSelectedWord(null);
     setSelectedAgent(null);
     setSelectedMonth(null);
+    setSelectedPriority(null);
+    setShowOnlyRecurring(false);
   };
 
-  const hasActiveFilters = searchTerm !== '' || selectedTeam !== null || selectedPeriod !== 'all' || selectedWord !== null || selectedAgent !== null || selectedMonth !== null;
+  const hasActiveFilters = searchTerm !== '' || selectedTeam !== null || selectedPeriod !== 'all' || selectedWord !== null || selectedAgent !== null || selectedMonth !== null || selectedPriority !== null || showOnlyRecurring;
+
+  if (isTvMode) {
+    return (
+      <div className="min-h-screen bg-slate-950 text-white font-sans antialiased flex flex-col p-6 space-y-6">
+        {/* TV Header */}
+        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
+          <div className="flex items-center space-x-3">
+            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
+            <div>
+              <h1 className="text-xl font-black uppercase tracking-wider flex items-center gap-2">
+                <Tv className="w-5 h-5 text-electric-rose animate-pulse" />
+                DASH SOLICITAÇÕES CX — WALLBOARD
+              </h1>
+              <p className="text-xs text-slate-400 font-medium">
+                Monitoramento em tempo real para TV de Escritório • Atualização contínua
+              </p>
+            </div>
+          </div>
+          
+          <div className="flex items-center space-x-4">
+            <BrasiliaClock />
+            <button
+              onClick={() => setIsTvMode(false)}
+              className="px-4 py-2 bg-electric-rose hover:bg-electric-rose/90 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-electric-rose/20 active:scale-95 cursor-pointer uppercase tracking-wider font-bold"
+            >
+              Sair do Modo TV
+            </button>
+          </div>
+        </div>
+
+        {/* TV Metrics */}
+        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col justify-between shadow-xl">
+            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Geral</span>
+            <div className="mt-4 flex items-baseline space-x-2">
+              <span className="text-6xl font-black text-white font-mono">{metrics.totalCount}</span>
+              <span className="text-xs text-slate-400 font-medium font-bold">chamados filtrados</span>
+            </div>
+            <div className="mt-4 border-t border-slate-800 pt-3 flex items-center justify-between text-xs text-slate-500">
+              <span>Atendimentos no escopo</span>
+              <Inbox className="w-4 h-4 text-slate-400" />
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col justify-between shadow-xl">
+            <span className="text-xs font-bold text-red-400 uppercase tracking-widest">🚨 Alertas Críticos / Altos</span>
+            <div className="mt-4 flex items-baseline space-x-2">
+              <span className="text-6xl font-black text-red-500 font-mono">{metrics.urgentCount}</span>
+              <span className="text-xs text-red-400/80 font-medium font-bold">requerem atenção</span>
+            </div>
+            <div className="mt-4 border-t border-slate-800 pt-3 flex items-center justify-between text-xs text-red-500/50">
+              <span>Ação imediata recomendada</span>
+              <ShieldAlert className="w-4 h-4 text-red-500 animate-pulse" />
+            </div>
+          </div>
+
+          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col justify-between shadow-xl">
+            <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">⚠️ Fator de Recorrência</span>
+            <div className="mt-4 flex items-baseline space-x-2">
+              <span className="text-6xl font-black text-amber-500 font-mono">{metrics.recurrenceRate}%</span>
+              <span className="text-xs text-amber-400/80 font-medium font-bold">de reincidência</span>
+            </div>
+            <div className="mt-4 border-t border-slate-800 pt-3 flex items-center justify-between text-xs text-amber-500/50">
+              <span>Clientes com múltiplos chamados</span>
+              <span className="text-xs">⚠️</span>
+            </div>
+          </div>
+        </div>
+
+        {/* TV Content Layout */}
+        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
+          {/* Charts area (8 cols) */}
+          <div className="col-span-12 lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl min-h-[380px]">
+              <div className="flex items-center space-x-2 mb-3 pb-2 border-b border-slate-800">
+                <Layers className="w-4 h-4 text-electric-rose" />
+                <h2 className="text-xs font-bold text-slate-300 uppercase tracking-widest">Volume por Equipe</h2>
+              </div>
+              <div className="flex-1 rounded-xl overflow-hidden p-2 text-slate-800">
+                <CustomBarChart 
+                  filteredTickets={filteredTickets} 
+                  selectedTeam={selectedTeam} 
+                  onSelectTeam={setSelectedTeam} 
+                  allTickets={tickets}
+                />
+              </div>
+            </div>
+
+            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl min-h-[380px]">
+              <div className="flex items-center space-x-2 mb-3 pb-2 border-b border-slate-800">
+                <ShieldAlert className="w-4 h-4 text-electric-rose" />
+                <h2 className="text-xs font-bold text-slate-300 uppercase tracking-widest">Perfil de Criticidade</h2>
+              </div>
+              <div className="flex-1 rounded-xl flex items-center justify-center p-2 text-slate-800">
+                <PriorityPieChart filteredTickets={filteredTickets} />
+              </div>
+            </div>
+          </div>
+
+          {/* Autoscrolling Urgent Feed (4 cols) */}
+          <div className="col-span-12 lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col shadow-xl h-[450px] lg:h-auto">
+            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
+              <div className="flex items-center space-x-2">
+                <ShieldAlert className="w-4 h-4 text-red-500 animate-pulse" />
+                <h2 className="text-xs font-bold text-slate-300 uppercase tracking-widest">Feed de Urgência (Auto)</h2>
+              </div>
+              <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
+                LATEST CRITICAL
+              </span>
+            </div>
+
+            <div 
+              ref={tvScrollRef}
+              className="flex-1 overflow-y-hidden space-y-3 pr-1 scrollbar-none"
+            >
+              {urgentTickets.length === 0 ? (
+                <div className="h-full flex flex-col items-center justify-center text-slate-500">
+                  <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
+                  <p className="text-xs">Nenhum chamado crítico ou alto ativo.</p>
+                </div>
+              ) : (
+                urgentTickets.map(ticket => (
+                  <div 
+                    key={ticket.id} 
+                    className="p-3 bg-slate-800/60 border border-slate-700/50 rounded-xl space-y-2 hover:bg-slate-800 transition-colors cursor-pointer"
+                    onClick={() => setSelectedTicketId(ticket.id)}
+                  >
+                    <div className="flex items-center justify-between">
+                      <div className="flex items-center space-x-1.5">
+                        <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
+                        <span className="text-xs font-bold text-white truncate max-w-[150px]">
+                          {ticket.clientName}
+                        </span>
+                        {recurringClients.has(ticket.clientName?.trim().toUpperCase()) && (
+                          <span className="px-1 py-0.5 rounded text-[8px] font-extrabold bg-amber-500/10 text-amber-400 border border-amber-500/20">
+                            REINCIDENTE
+                          </span>
+                        )}
+                      </div>
+                      <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-red-500/10 text-red-400 border border-red-500/20">
+                        {ticket.urgency}
+                      </span>
+                    </div>
+
+                    <p className="text-[11px] text-slate-300 line-clamp-2">
+                      {ticket.description}
+                    </p>
+
+                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
+                      <span>Equipe: {ticket.team}</span>
+                      <span>Enviado por: {formatAgentName(ticket.agentName)}</span>
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+          </div>
+        </div>
+
+        {/* Modal detail overlay support even in TV mode */}
+        {selectedTicketId && (
+          <TicketDetailModal
+            ticketId={selectedTicketId}
+            tickets={tickets}
+            onClose={() => setSelectedTicketId(null)}
+          />
+        )}
+      </div>
+    );
+  }
 
   return (
     <div className="min-h-screen bg-slate-50 text-obsidian-black font-sans antialiased flex flex-col selection:bg-electric-rose/10 selection:text-electric-rose">
@@ -374,14 +613,24 @@ export default function App() {
             </p>
           </div>
           
-          <button
-            onClick={handleReload}
-            disabled={isLoading}
-            className="self-start md:self-auto flex items-center space-x-2 px-4 py-2.5 bg-obsidian-black hover:bg-electric-rose disabled:bg-slate-300 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer"
-          >
-            <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
-            <span>{isLoading ? "Sincronizando..." : "Sincronizar Planilha"}</span>
-          </button>
+          <div className="flex flex-wrap items-center gap-3">
+            <button
+              onClick={() => setIsTvMode(true)}
+              className="flex items-center space-x-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer font-bold"
+            >
+              <Tv className="w-3.5 h-3.5" />
+              <span>Modo TV / Wallboard</span>
+            </button>
+
+            <button
+              onClick={handleReload}
+              disabled={isLoading}
+              className="flex items-center space-x-2 px-4 py-2.5 bg-obsidian-black hover:bg-electric-rose disabled:bg-slate-300 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer font-bold"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${isLoading ? 'animate-spin' : ''}`} />
+              <span>{isLoading ? "Sincronizando..." : "Sincronizar Planilha"}</span>
+            </button>
+          </div>
         </div>
 
         {/* Loading Spinner / Skeleton Overlay */}
@@ -473,7 +722,7 @@ export default function App() {
                 </div>
 
                 {/* Period Range Tabs Filter */}
-                <div className="col-span-12 md:col-span-6">
+                <div className="col-span-12 md:col-span-4">
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
                     Intervalo Temporal Rápido
                   </label>
@@ -503,7 +752,7 @@ export default function App() {
                 </div>
 
                 {/* Specific Month Dropdown Filter */}
-                <div className="col-span-12 md:col-span-6">
+                <div className="col-span-12 md:col-span-4">
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
                     Análise Mensal (Histórico)
                   </label>
@@ -523,6 +772,45 @@ export default function App() {
                       <option key={m} value={m}>{m}</option>
                     ))}
                   </select>
+                </div>
+
+                {/* Priority Dropdown Filter */}
+                <div className="col-span-12 sm:col-span-6 md:col-span-4">
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                    Filtrar por Prioridade
+                  </label>
+                  <select
+                    value={selectedPriority || ''}
+                    onChange={(e) => setSelectedPriority(e.target.value || null)}
+                    className="w-full text-sm py-2.5 px-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-electric-rose/20 focus:border-electric-rose font-sans text-slate-800 transition-all cursor-pointer"
+                  >
+                    <option value="">Todas as Prioridades</option>
+                    <option value="Crítica">🚨 Crítica</option>
+                    <option value="Alta">⚠️ Alta</option>
+                    <option value="Média">🟡 Média</option>
+                    <option value="Baixa">🟢 Baixa</option>
+                    <option value="Dúvida">🔵 Dúvida</option>
+                  </select>
+                </div>
+
+                {/* Checkbox Recorrentes */}
+                <div className="col-span-12 flex items-center bg-amber-50/40 border border-amber-100 p-3 rounded-xl mt-1">
+                  <label className="flex items-center space-x-3 cursor-pointer select-none">
+                    <input
+                      type="checkbox"
+                      checked={showOnlyRecurring}
+                      onChange={(e) => setShowOnlyRecurring(e.target.checked)}
+                      className="w-4.5 h-4.5 rounded border-slate-300 text-electric-rose focus:ring-electric-rose/20 accent-electric-rose cursor-pointer"
+                    />
+                    <div>
+                      <span className="text-sm font-bold text-slate-800">
+                        ⚠️ Exibir apenas clientes reincidentes
+                      </span>
+                      <p className="text-[11px] text-slate-500">
+                        Oculta chamados comuns e foca exclusivamente em clientes com múltiplos atendimentos na base histórica.
+                      </p>
+                    </div>
+                  </label>
                 </div>
               </div>
 
@@ -572,6 +860,20 @@ export default function App() {
                     </span>
                   )}
 
+                  {selectedPriority && (
+                    <span className="inline-flex items-center px-3 py-1 bg-slate-900 text-white rounded-full text-xs font-medium space-x-1.5 border border-slate-950">
+                      <span>Prioridade: {selectedPriority}</span>
+                      <button onClick={() => setSelectedPriority(null)} className="hover:text-electric-rose cursor-pointer font-bold">×</button>
+                    </span>
+                  )}
+
+                  {showOnlyRecurring && (
+                    <span className="inline-flex items-center px-3 py-1 bg-amber-500 text-white rounded-full text-xs font-medium space-x-1.5 shadow-xs shadow-amber-500/10">
+                      <span>Apenas Reincidentes</span>
+                      <button onClick={() => setShowOnlyRecurring(false)} className="hover:text-white/80 cursor-pointer font-bold">×</button>
+                    </span>
+                  )}
+
                   {searchTerm && (
                     <span className="inline-flex items-center px-3 py-1 bg-slate-900 text-white rounded-full text-xs font-medium space-x-1.5 border border-slate-950">
                       <span className="truncate max-w-[150px]">Busca: "{searchTerm}"</span>
@@ -582,8 +884,8 @@ export default function App() {
               )}
             </section>
 
-            {/* 3. Metrics/KPI Row (2 columns, simple, elegant, no CSAT/SLA) */}
-            <section id="metrics-row" className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            {/* 3. Metrics/KPI Row (3 columns, simple, elegant, no CSAT/SLA) */}
+            <section id="metrics-row" className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               
               {/* Metric 1: Total realizado */}
               <div className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between shadow-xs relative overflow-hidden group">
@@ -618,6 +920,24 @@ export default function App() {
                 </div>
                 <div className="p-3.5 bg-red-50 text-red-500 rounded-xl group-hover:bg-red-100 transition-colors duration-300">
                   <ShieldAlert className="w-5 h-5" />
+                </div>
+              </div>
+
+              {/* Metric 3: Recurrence Rate */}
+              <div className="bg-white rounded-2xl border border-slate-200 p-5 flex items-center justify-between shadow-xs relative overflow-hidden group">
+                <div className="space-y-1">
+                  <span className="text-[11px] font-bold text-slate-400 uppercase tracking-wider block">
+                    Fator de Recorrência
+                  </span>
+                  <h3 className="text-3xl font-black font-sans tracking-tight text-amber-600 font-mono">
+                    {metrics.recurrenceRate}%
+                  </h3>
+                  <p className="text-[11px] text-slate-500 font-medium">
+                    Reincidência de clientes
+                  </p>
+                </div>
+                <div className="p-3.5 bg-amber-50 text-amber-500 rounded-xl group-hover:bg-amber-100 transition-colors duration-300">
+                  <span className="text-lg font-bold">⚠️</span>
                 </div>
               </div>
 
@@ -876,7 +1196,7 @@ export default function App() {
                               <td className="py-3.5 px-4 max-w-sm">
                                 <div className="flex flex-col">
                                   <span className="font-bold text-slate-800 group-hover:text-electric-rose transition-colors line-clamp-1" title={ticket.description}>
-                                    {ticket.description}
+                                    {highlightText(ticket.description, searchTerm)}
                                   </span>
                                   <span className="text-[11px] text-slate-400 font-mono">
                                     Aberto: {ticketDateStr}
