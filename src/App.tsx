@@ -20,7 +20,9 @@ import {
   RefreshCw,
   Database,
   Wifi,
-  WifiOff
+  WifiOff,
+  ChevronLeft,
+  ChevronRight
 } from 'lucide-react';
 import { Ticket } from './types';
 import { INITIAL_TICKETS } from './data';
@@ -28,6 +30,7 @@ import { parseGoogleSheetsCSV } from './utils';
 import WordCloud from './components/WordCloud';
 import CustomBarChart from './components/CustomBarChart';
 import TicketDetailModal from './components/TicketDetailModal';
+import BrasiliaClock from './components/BrasiliaClock';
 
 type PeriodType = 'all' | 'today' | '7days' | '30days';
 
@@ -47,17 +50,14 @@ export default function App() {
   // Selected Ticket for Modal Details
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
 
-  // UTC Time from metadata
-  const currentLocalTime = "2026-06-24T09:21:00-07:00";
-  const formattedDate = useMemo(() => {
-    const d = new Date(currentLocalTime);
-    return d.toLocaleDateString('pt-BR', {
-      weekday: 'long',
-      year: 'numeric',
-      month: 'long',
-      day: 'numeric'
-    });
-  }, []);
+  // Pagination State
+  const [currentPage, setCurrentPage] = useState(1);
+  const itemsPerPage = 50;
+
+  // Reset pagination to first page when filters change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [searchTerm, selectedTeam, selectedPeriod, selectedWord]);
 
   // Fetch spreadsheet data at startup
   useEffect(() => {
@@ -140,13 +140,12 @@ export default function App() {
 
       // 3. Period Filter
       const ticketDate = new Date(ticket.createdAt);
-      const referenceDate = new Date(currentLocalTime);
+      const referenceDate = new Date();
       
       if (selectedPeriod === 'today') {
-        const isToday = ticketDate.getUTCFullYear() === referenceDate.getUTCFullYear() &&
-                        ticketDate.getUTCMonth() === referenceDate.getUTCMonth() &&
-                        ticketDate.getUTCDate() === referenceDate.getUTCDate();
-        if (!isToday) return false;
+        const ticketLocalStr = ticketDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        const refLocalStr = referenceDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+        if (ticketLocalStr !== refLocalStr) return false;
       } else if (selectedPeriod === '7days') {
         const diffTime = Math.abs(referenceDate.getTime() - ticketDate.getTime());
         const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
@@ -197,6 +196,17 @@ export default function App() {
     return [...filteredTickets].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
   }, [filteredTickets]);
 
+  // Total pages
+  const totalPages = useMemo(() => {
+    return Math.ceil(generalTickets.length / itemsPerPage) || 1;
+  }, [generalTickets, itemsPerPage]);
+
+  // Paginated tickets list
+  const paginatedTickets = useMemo(() => {
+    const startIndex = (currentPage - 1) * itemsPerPage;
+    return generalTickets.slice(startIndex, startIndex + itemsPerPage);
+  }, [generalTickets, currentPage, itemsPerPage]);
+
   // Reset all dashboard filters
   const handleResetFilters = () => {
     setSearchTerm('');
@@ -227,13 +237,7 @@ export default function App() {
 
           {/* Time & Database status information */}
           <div className="flex items-center space-x-4">
-            <div className="hidden sm:flex items-center space-x-2 text-xs text-slate-500 font-medium">
-              <Calendar className="w-3.5 h-3.5 text-slate-400" />
-              <span className="capitalize">{formattedDate}</span>
-              <span className="text-slate-300">•</span>
-              <Clock className="w-3.5 h-3.5 text-slate-400" />
-              <span className="font-mono">16:21 UTC</span>
-            </div>
+            <BrasiliaClock />
 
             {/* Connection Status Badge */}
             <button 
@@ -551,8 +555,8 @@ export default function App() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {urgentTickets.slice(0, 4).map((ticket) => {
-                    const timeStr = new Date(ticket.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-                    const dateStr = new Date(ticket.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit' });
+                    const timeStr = new Date(ticket.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
+                    const dateStr = new Date(ticket.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
                     
                     return (
                       <motion.div
@@ -627,7 +631,7 @@ export default function App() {
                   </h2>
                 </div>
                 <span className="text-xs text-slate-400 font-semibold">
-                  Exibindo <strong className="text-slate-700">{generalTickets.length}</strong> de <strong className="text-slate-700">{tickets.length}</strong> chamados totais
+                  Exibindo <strong className="text-slate-700">{Math.min(generalTickets.length, (currentPage - 1) * itemsPerPage + 1)}-{Math.min(generalTickets.length, currentPage * itemsPerPage)}</strong> de <strong className="text-slate-700">{generalTickets.length}</strong> chamados filtrados
                 </span>
               </div>
 
@@ -643,96 +647,146 @@ export default function App() {
                   </button>
                 </div>
               ) : (
-                <div className="overflow-x-auto rounded-xl border border-slate-200">
-                  <table className="w-full text-left border-collapse min-w-[600px]">
-                    <thead>
-                      <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-sans font-bold text-[10px] uppercase tracking-wider">
-                        <th className="py-3 px-4">Cliente Herói</th>
-                        <th className="py-3 px-4">Solicitação</th>
-                        <th className="py-3 px-4">Equipe</th>
-                        <th className="py-3 px-4">Gravidade</th>
-                        <th className="py-3 px-4 text-center">Interação</th>
-                      </tr>
-                    </thead>
-                    <tbody className="divide-y divide-slate-100 text-sm">
-                      {generalTickets.map((ticket) => {
-                        const ticketDateStr = new Date(ticket.createdAt).toLocaleDateString('pt-BR', {
-                          day: '2-digit',
-                          month: '2-digit',
-                          hour: '2-digit',
-                          minute: '2-digit'
-                        });
+                <>
+                  <div className="overflow-x-auto rounded-xl border border-slate-200">
+                    <table className="w-full text-left border-collapse min-w-[600px]">
+                      <thead>
+                        <tr className="bg-slate-50 border-b border-slate-200 text-slate-400 font-sans font-bold text-[10px] uppercase tracking-wider">
+                          <th className="py-3 px-4">Cliente Herói</th>
+                          <th className="py-3 px-4">Solicitação</th>
+                          <th className="py-3 px-4">Equipe</th>
+                          <th className="py-3 px-4">Gravidade</th>
+                          <th className="py-3 px-4 text-center">Interação</th>
+                        </tr>
+                      </thead>
+                      <tbody className="divide-y divide-slate-100 text-sm">
+                        {paginatedTickets.map((ticket) => {
+                          const ticketDateStr = new Date(ticket.createdAt).toLocaleDateString('pt-BR', {
+                            day: '2-digit',
+                            month: '2-digit',
+                            hour: '2-digit',
+                            minute: '2-digit',
+                            timeZone: 'America/Sao_Paulo'
+                          });
 
-                        // Determine urgency dot color
-                        const getUrgencyDot = (urgency: string) => {
-                          switch (urgency) {
-                            case 'Crítica': return 'bg-red-500';
-                            case 'Alta': return 'bg-orange-500';
-                            case 'Média': return 'bg-amber-400';
-                            case 'Dúvida': return 'bg-blue-500';
-                            default: return 'bg-slate-400';
-                          }
-                        };
+                          // Determine urgency dot color
+                          const getUrgencyDot = (urgency: string) => {
+                            switch (urgency) {
+                              case 'Crítica': return 'bg-red-500';
+                              case 'Alta': return 'bg-orange-500';
+                              case 'Média': return 'bg-amber-400';
+                              case 'Dúvida': return 'bg-blue-500';
+                              default: return 'bg-slate-400';
+                            }
+                          };
 
-                        return (
-                          <tr 
-                            key={ticket.id} 
-                            className="hover:bg-slate-50/70 transition-colors duration-150 group"
-                          >
-                            {/* Client details */}
-                            <td className="py-3.5 px-4">
-                              <div className="flex flex-col">
-                                <span className="font-semibold text-slate-800">{ticket.clientName}</span>
-                                {ticket.phone && (
-                                  <span className="text-[11px] text-slate-400 font-mono" title={ticket.phone}>
-                                    {ticket.phone}
+                          return (
+                            <tr 
+                              key={ticket.id} 
+                              className="hover:bg-slate-50/70 transition-colors duration-150 group"
+                            >
+                              {/* Client details */}
+                              <td className="py-3.5 px-4">
+                                <div className="flex flex-col">
+                                  <span className="font-semibold text-slate-800">{ticket.clientName}</span>
+                                  {ticket.phone && (
+                                    <span className="text-[11px] text-slate-400 font-mono" title={ticket.phone}>
+                                      {ticket.phone}
+                                    </span>
+                                  )}
+                                </div>
+                              </td>
+
+                              {/* Solicitação description excerpt */}
+                              <td className="py-3.5 px-4 max-w-sm">
+                                <div className="flex flex-col">
+                                  <span className="font-bold text-slate-800 group-hover:text-electric-rose transition-colors line-clamp-1" title={ticket.description}>
+                                    {ticket.description}
                                   </span>
-                                )}
-                              </div>
-                            </td>
+                                  <span className="text-[11px] text-slate-400 font-mono">
+                                    Aberto: {ticketDateStr}
+                                  </span>
+                                </div>
+                              </td>
 
-                            {/* Solicitação description excerpt */}
-                            <td className="py-3.5 px-4 max-w-sm">
-                              <div className="flex flex-col">
-                                <span className="font-bold text-slate-800 group-hover:text-electric-rose transition-colors line-clamp-1" title={ticket.description}>
-                                  {ticket.description}
+                              {/* Team Category */}
+                              <td className="py-3.5 px-4">
+                                <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
+                                  {ticket.team}
                                 </span>
-                                <span className="text-[11px] text-slate-400 font-mono">
-                                  Aberto: {ticketDateStr}
-                                </span>
-                              </div>
-                            </td>
+                              </td>
 
-                            {/* Team Category */}
-                            <td className="py-3.5 px-4">
-                              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-slate-100 text-slate-700 border border-slate-200">
-                                {ticket.team}
-                              </span>
-                            </td>
+                              {/* Urgency Badge */}
+                              <td className="py-3.5 px-4">
+                                <div className="flex items-center space-x-1.5">
+                                  <span className={`w-2 h-2 rounded-full ${getUrgencyDot(ticket.urgency)}`}></span>
+                                  <span className="text-xs text-slate-700 font-medium">{ticket.urgency}</span>
+                                </div>
+                              </td>
 
-                            {/* Urgency Badge */}
-                            <td className="py-3.5 px-4">
-                              <div className="flex items-center space-x-1.5">
-                                <span className={`w-2 h-2 rounded-full ${getUrgencyDot(ticket.urgency)}`}></span>
-                                <span className="text-xs text-slate-700 font-medium">{ticket.urgency}</span>
-                              </div>
-                            </td>
+                              {/* Modal Action trigger */}
+                              <td className="py-3.5 px-4 text-center">
+                                <button
+                                  onClick={() => setSelectedTicketId(ticket.id)}
+                                  className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-obsidian-black hover:bg-electric-rose text-white hover:text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
+                                >
+                                  <span>Ver Detalhes</span>
+                                </button>
+                              </td>
+                            </tr>
+                          );
+                        })}
+                      </tbody>
+                    </table>
+                  </div>
 
-                            {/* Modal Action trigger */}
-                            <td className="py-3.5 px-4 text-center">
-                              <button
-                                onClick={() => setSelectedTicketId(ticket.id)}
-                                className="inline-flex items-center space-x-1.5 px-3.5 py-1.5 bg-obsidian-black hover:bg-electric-rose text-white hover:text-white rounded-lg text-xs font-bold transition-all shadow-xs cursor-pointer active:scale-95"
-                              >
-                                <span>Ver Detalhes</span>
-                              </button>
-                            </td>
-                          </tr>
-                        );
-                      })}
-                    </tbody>
-                  </table>
-                </div>
+                  {/* Pagination Controls */}
+                  {totalPages > 1 && (
+                    <div className="flex flex-col sm:flex-row items-center justify-between gap-4 mt-5 pt-4 border-t border-slate-100">
+                      <div className="text-xs text-slate-500 font-medium">
+                        Página <strong className="text-obsidian-black">{currentPage}</strong> de <strong className="text-obsidian-black">{totalPages}</strong>
+                      </div>
+
+                      <div className="flex items-center space-x-1">
+                        <button
+                          onClick={() => setCurrentPage(1)}
+                          disabled={currentPage === 1}
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-obsidian-black disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all text-xs font-bold cursor-pointer"
+                          title="Primeira Página"
+                        >
+                          &laquo;
+                        </button>
+                        
+                        <button
+                          onClick={() => setCurrentPage(prev => Math.max(prev - 1, 1))}
+                          disabled={currentPage === 1}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-obsidian-black disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all text-xs font-bold flex items-center space-x-1 cursor-pointer"
+                        >
+                          <ChevronLeft className="w-3.5 h-3.5" />
+                          <span>Anterior</span>
+                        </button>
+
+                        <button
+                          onClick={() => setCurrentPage(prev => Math.min(prev + 1, totalPages))}
+                          disabled={currentPage === totalPages}
+                          className="px-3 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-obsidian-black disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all text-xs font-bold flex items-center space-x-1 cursor-pointer"
+                        >
+                          <span>Próxima</span>
+                          <ChevronRight className="w-3.5 h-3.5" />
+                        </button>
+
+                        <button
+                          onClick={() => setCurrentPage(totalPages)}
+                          disabled={currentPage === totalPages}
+                          className="px-2.5 py-1.5 rounded-lg border border-slate-200 text-slate-500 hover:bg-slate-50 hover:text-obsidian-black disabled:opacity-30 disabled:hover:bg-transparent disabled:cursor-not-allowed transition-all text-xs font-bold cursor-pointer"
+                          title="Última Página"
+                        >
+                          &raquo;
+                        </button>
+                      </div>
+                    </div>
+                  )}
+                </>
               )}
             </section>
           </>

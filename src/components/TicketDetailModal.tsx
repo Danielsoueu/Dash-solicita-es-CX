@@ -23,7 +23,8 @@ export default function TicketDetailModal({ ticket, onClose }: TicketDetailModal
       month: '2-digit',
       year: 'numeric',
       hour: '2-digit',
-      minute: '2-digit'
+      minute: '2-digit',
+      timeZone: 'America/Sao_Paulo'
     });
   };
 
