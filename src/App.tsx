@@ -22,8 +22,7 @@ import {
   Wifi,
   WifiOff,
   ChevronLeft,
-  ChevronRight,
-  Tv
+  ChevronRight
 } from 'lucide-react';
 import { Ticket } from './types';
 import { INITIAL_TICKETS } from './data';
@@ -52,7 +51,6 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<string | null>(null);
   const [showOnlyRecurring, setShowOnlyRecurring] = useState(false);
-  const [isTvMode, setIsTvMode] = useState(false);
   
   // Selected Ticket for Modal Details
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -107,28 +105,7 @@ export default function App() {
     }
   };
 
-  // TV Wallboard scroll effect
-  const tvScrollRef = useRef<HTMLDivElement>(null);
-  useEffect(() => {
-    if (!isTvMode) return;
-    const container = tvScrollRef.current;
-    if (!container) return;
-    let animationFrameId: number;
-    let lastTime = performance.now();
-    const scroll = (now: number) => {
-      if (container) {
-        const delta = (now - lastTime) / 1000;
-        container.scrollTop += 25 * delta;
-        if (container.scrollTop + container.clientHeight >= container.scrollHeight - 5) {
-          container.scrollTop = 0;
-        }
-      }
-      lastTime = now;
-      animationFrameId = requestAnimationFrame(scroll);
-    };
-    animationFrameId = requestAnimationFrame(scroll);
-    return () => cancelAnimationFrame(animationFrameId);
-  }, [isTvMode, tickets]);
+
 
   // Reset pagination to first page when filters change
   useEffect(() => {
@@ -371,176 +348,6 @@ export default function App() {
 
   const hasActiveFilters = searchTerm !== '' || selectedTeam !== null || selectedPeriod !== 'all' || selectedWord !== null || selectedAgent !== null || selectedMonth !== null || selectedPriority !== null || showOnlyRecurring;
 
-  if (isTvMode) {
-    return (
-      <div className="min-h-screen bg-slate-950 text-white font-sans antialiased flex flex-col p-6 space-y-6">
-        {/* TV Header */}
-        <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col md:flex-row items-center justify-between gap-4 shadow-xl">
-          <div className="flex items-center space-x-3">
-            <div className="w-3 h-3 bg-red-500 rounded-full animate-pulse"></div>
-            <div>
-              <h1 className="text-xl font-black uppercase tracking-wider flex items-center gap-2">
-                <Tv className="w-5 h-5 text-electric-rose animate-pulse" />
-                DASH SOLICITAÇÕES CX — WALLBOARD
-              </h1>
-              <p className="text-xs text-slate-400 font-medium">
-                Monitoramento em tempo real para TV de Escritório • Atualização contínua
-              </p>
-            </div>
-          </div>
-          
-          <div className="flex items-center space-x-4">
-            <BrasiliaClock />
-            <button
-              onClick={() => setIsTvMode(false)}
-              className="px-4 py-2 bg-electric-rose hover:bg-electric-rose/90 text-white text-xs font-bold rounded-xl transition-all shadow-lg shadow-electric-rose/20 active:scale-95 cursor-pointer uppercase tracking-wider font-bold"
-            >
-              Sair do Modo TV
-            </button>
-          </div>
-        </div>
-
-        {/* TV Metrics */}
-        <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col justify-between shadow-xl">
-            <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">Total Geral</span>
-            <div className="mt-4 flex items-baseline space-x-2">
-              <span className="text-6xl font-black text-white font-mono">{metrics.totalCount}</span>
-              <span className="text-xs text-slate-400 font-medium font-bold">chamados filtrados</span>
-            </div>
-            <div className="mt-4 border-t border-slate-800 pt-3 flex items-center justify-between text-xs text-slate-500">
-              <span>Atendimentos no escopo</span>
-              <Inbox className="w-4 h-4 text-slate-400" />
-            </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col justify-between shadow-xl">
-            <span className="text-xs font-bold text-red-400 uppercase tracking-widest">🚨 Alertas Críticos / Altos</span>
-            <div className="mt-4 flex items-baseline space-x-2">
-              <span className="text-6xl font-black text-red-500 font-mono">{metrics.urgentCount}</span>
-              <span className="text-xs text-red-400/80 font-medium font-bold">requerem atenção</span>
-            </div>
-            <div className="mt-4 border-t border-slate-800 pt-3 flex items-center justify-between text-xs text-red-500/50">
-              <span>Ação imediata recomendada</span>
-              <ShieldAlert className="w-4 h-4 text-red-500 animate-pulse" />
-            </div>
-          </div>
-
-          <div className="bg-slate-900 border border-slate-800 rounded-3xl p-6 flex flex-col justify-between shadow-xl">
-            <span className="text-xs font-bold text-amber-400 uppercase tracking-widest">⚠️ Fator de Recorrência</span>
-            <div className="mt-4 flex items-baseline space-x-2">
-              <span className="text-6xl font-black text-amber-500 font-mono">{metrics.recurrenceRate}%</span>
-              <span className="text-xs text-amber-400/80 font-medium font-bold">de reincidência</span>
-            </div>
-            <div className="mt-4 border-t border-slate-800 pt-3 flex items-center justify-between text-xs text-amber-500/50">
-              <span>Clientes com múltiplos chamados</span>
-              <span className="text-xs">⚠️</span>
-            </div>
-          </div>
-        </div>
-
-        {/* TV Content Layout */}
-        <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 flex-1">
-          {/* Charts area (8 cols) */}
-          <div className="col-span-12 lg:col-span-8 grid grid-cols-1 md:grid-cols-2 gap-6">
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl min-h-[380px]">
-              <div className="flex items-center space-x-2 mb-3 pb-2 border-b border-slate-800">
-                <Layers className="w-4 h-4 text-electric-rose" />
-                <h2 className="text-xs font-bold text-slate-300 uppercase tracking-widest">Volume por Equipe</h2>
-              </div>
-              <div className="flex-1 rounded-xl overflow-hidden p-2 text-slate-800">
-                <CustomBarChart 
-                  filteredTickets={filteredTickets} 
-                  selectedTeam={selectedTeam} 
-                  onSelectTeam={setSelectedTeam} 
-                  allTickets={tickets}
-                />
-              </div>
-            </div>
-
-            <div className="bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col justify-between shadow-xl min-h-[380px]">
-              <div className="flex items-center space-x-2 mb-3 pb-2 border-b border-slate-800">
-                <ShieldAlert className="w-4 h-4 text-electric-rose" />
-                <h2 className="text-xs font-bold text-slate-300 uppercase tracking-widest">Perfil de Criticidade</h2>
-              </div>
-              <div className="flex-1 rounded-xl flex items-center justify-center p-2 text-slate-800">
-                <PriorityPieChart filteredTickets={filteredTickets} />
-              </div>
-            </div>
-          </div>
-
-          {/* Autoscrolling Urgent Feed (4 cols) */}
-          <div className="col-span-12 lg:col-span-4 bg-slate-900 border border-slate-800 rounded-2xl p-5 flex flex-col shadow-xl h-[450px] lg:h-auto">
-            <div className="flex items-center justify-between mb-3 pb-2 border-b border-slate-800">
-              <div className="flex items-center space-x-2">
-                <ShieldAlert className="w-4 h-4 text-red-500 animate-pulse" />
-                <h2 className="text-xs font-bold text-slate-300 uppercase tracking-widest">Feed de Urgência (Auto)</h2>
-              </div>
-              <span className="text-[10px] font-mono text-slate-400 bg-slate-800 px-2 py-0.5 rounded border border-slate-700">
-                LATEST CRITICAL
-              </span>
-            </div>
-
-            <div 
-              ref={tvScrollRef}
-              className="flex-1 overflow-y-hidden space-y-3 pr-1 scrollbar-none"
-            >
-              {urgentTickets.length === 0 ? (
-                <div className="h-full flex flex-col items-center justify-center text-slate-500">
-                  <CheckCircle className="w-8 h-8 text-emerald-500 mb-2" />
-                  <p className="text-xs">Nenhum chamado crítico ou alto ativo.</p>
-                </div>
-              ) : (
-                urgentTickets.map(ticket => (
-                  <div 
-                    key={ticket.id} 
-                    className="p-3 bg-slate-800/60 border border-slate-700/50 rounded-xl space-y-2 hover:bg-slate-800 transition-colors cursor-pointer"
-                    onClick={() => setSelectedTicketId(ticket.id)}
-                  >
-                    <div className="flex items-center justify-between">
-                      <div className="flex items-center space-x-1.5">
-                        <span className="w-2 h-2 rounded-full bg-red-500 animate-ping"></span>
-                        <span className="text-xs font-bold text-white truncate max-w-[150px]">
-                          {ticket.clientName}
-                        </span>
-                        {recurringClients.has(ticket.clientName?.trim().toUpperCase()) && (
-                          <span className="px-1 py-0.5 rounded text-[8px] font-extrabold bg-amber-500/10 text-amber-400 border border-amber-500/20">
-                            REINCIDENTE
-                          </span>
-                        )}
-                      </div>
-                      <span className="px-2 py-0.5 rounded text-[9px] font-extrabold bg-red-500/10 text-red-400 border border-red-500/20">
-                        {ticket.urgency}
-                      </span>
-                    </div>
-
-                    <p className="text-[11px] text-slate-300 line-clamp-2">
-                      {ticket.description}
-                    </p>
-
-                    <div className="flex items-center justify-between text-[10px] text-slate-400 font-mono">
-                      <span>Equipe: {ticket.team}</span>
-                      <span>Enviado por: {formatAgentName(ticket.agentName)}</span>
-                    </div>
-                  </div>
-                ))
-              )}
-            </div>
-          </div>
-        </div>
-
-        {/* Modal detail overlay support even in TV mode */}
-        {selectedTicketId && (
-          <TicketDetailModal
-            ticketId={selectedTicketId}
-            tickets={tickets}
-            onClose={() => setSelectedTicketId(null)}
-          />
-        )}
-      </div>
-    );
-  }
-
   return (
     <div className="min-h-screen bg-slate-50 text-obsidian-black font-sans antialiased flex flex-col selection:bg-electric-rose/10 selection:text-electric-rose">
       {/* 1. Global Navigation Bar */}
@@ -614,14 +421,6 @@ export default function App() {
           </div>
           
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              onClick={() => setIsTvMode(true)}
-              className="flex items-center space-x-2 px-4 py-2.5 bg-slate-800 hover:bg-slate-700 text-white font-bold text-xs rounded-xl shadow-md transition-all active:scale-95 cursor-pointer font-bold"
-            >
-              <Tv className="w-3.5 h-3.5" />
-              <span>Modo TV / Wallboard</span>
-            </button>
-
             <button
               onClick={handleReload}
               disabled={isLoading}
