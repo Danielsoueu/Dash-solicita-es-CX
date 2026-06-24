@@ -28,6 +28,18 @@ export default function TicketDetailModal({ ticket, onClose }: TicketDetailModal
     });
   };
 
+  const formatAgentName = (rawName: string | undefined): string => {
+    if (!rawName) return '';
+    let name = rawName.trim();
+    if (name.startsWith('@')) {
+      name = name.slice(1);
+    }
+    if (name.includes('@')) {
+      name = name.split('@')[0];
+    }
+    return name.trim();
+  };
+
   return (
     <AnimatePresence>
       <div className="fixed inset-0 z-50 overflow-y-auto flex items-center justify-center p-4">
@@ -102,7 +114,7 @@ export default function TicketDetailModal({ ticket, onClose }: TicketDetailModal
 
                   <div className="flex items-center space-x-2 text-xs text-slate-600">
                     <User className="w-4 h-4 text-slate-400 shrink-0" />
-                    <span>Quem Enviou: <strong className="text-slate-800">{ticket.agentName}</strong></span>
+                    <span>Quem Enviou: <strong className="text-slate-800">{formatAgentName(ticket.agentName)}</strong></span>
                   </div>
                 </div>
               </div>

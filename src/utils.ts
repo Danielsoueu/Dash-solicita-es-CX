@@ -146,6 +146,11 @@ export function parseGoogleSheetsCSV(csvText: string): Ticket[] {
       } else {
         team = rawTeam.trim();
       }
+      
+      // Unify Cobrança and Inadimplência
+      if (team === 'Inadimplência' || team === 'Inadimplencia' || team === 'Inad') {
+        team = 'Cobrança';
+      }
     }
 
     const description = cells[5] || '';

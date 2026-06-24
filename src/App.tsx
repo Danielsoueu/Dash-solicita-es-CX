@@ -31,6 +31,7 @@ import WordCloud from './components/WordCloud';
 import CustomBarChart from './components/CustomBarChart';
 import TicketDetailModal from './components/TicketDetailModal';
 import BrasiliaClock from './components/BrasiliaClock';
+import PriorityPieChart from './components/PriorityPieChart';
 
 type PeriodType = 'all' | 'today' | '7days' | '30days';
 
@@ -46,6 +47,8 @@ export default function App() {
   const [selectedTeam, setSelectedTeam] = useState<string | null>(null);
   const [selectedPeriod, setSelectedPeriod] = useState<PeriodType>('all');
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
+  const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
+  const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   
   // Selected Ticket for Modal Details
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -54,10 +57,31 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState(1);
   const itemsPerPage = 50;
 
+  // Helper to get formatted month/year string
+  const getTicketMonthYear = (dateStr: string) => {
+    const date = new Date(dateStr);
+    const month = date.toLocaleDateString('pt-BR', { month: 'long', timeZone: 'America/Sao_Paulo' });
+    const year = date.toLocaleDateString('pt-BR', { year: 'numeric', timeZone: 'America/Sao_Paulo' });
+    return `${month.charAt(0).toUpperCase() + month.slice(1)} de ${year}`;
+  };
+
+  // Helper to clean and format agent names (removes @ and domain or prefix)
+  const formatAgentName = (rawName: string | undefined): string => {
+    if (!rawName) return '';
+    let name = rawName.trim();
+    if (name.startsWith('@')) {
+      name = name.slice(1);
+    }
+    if (name.includes('@')) {
+      name = name.split('@')[0];
+    }
+    return name.trim();
+  };
+
   // Reset pagination to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedTeam, selectedPeriod, selectedWord]);
+  }, [searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth]);
 
   // Fetch spreadsheet data at startup
   useEffect(() => {
@@ -125,6 +149,53 @@ export default function App() {
     return Array.from(teamsSet).sort();
   }, [tickets]);
 
+  // Unique list of frontline assessors ("Quem enviou")
+  const uniqueAgents = useMemo(() => {
+    const agentsSet = new Set<string>();
+    tickets.forEach(t => {
+      if (t.agentName) {
+        const cleanName = formatAgentName(t.agentName);
+        if (cleanName) {
+          agentsSet.add(cleanName);
+        }
+      }
+    });
+    return Array.from(agentsSet).filter(Boolean).sort();
+  }, [tickets]);
+
+  // Chronologically ordered months from the sheet history
+  const uniqueMonths = useMemo(() => {
+    const orderedMonths: string[] = [];
+    const sortedTickets = [...tickets].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    sortedTickets.forEach(t => {
+      if (t.createdAt) {
+        const m = getTicketMonthYear(t.createdAt);
+        if (!orderedMonths.includes(m)) {
+          orderedMonths.push(m);
+        }
+      }
+    });
+    return orderedMonths;
+  }, [tickets]);
+
+  // Identify recurring clients based on frequency > 1 in the raw base
+  const recurringClients = useMemo(() => {
+    const counts: Record<string, number> = {};
+    tickets.forEach(t => {
+      if (t.clientName) {
+        const norm = t.clientName.trim().toUpperCase();
+        counts[norm] = (counts[norm] || 0) + 1;
+      }
+    });
+    const recurring = new Set<string>();
+    Object.entries(counts).forEach(([name, count]) => {
+      if (count > 1) {
+        recurring.add(name);
+      }
+    });
+    return recurring;
+  }, [tickets]);
+
   // Compute filtered tickets
   const filteredTickets = useMemo(() => {
     return tickets.filter(ticket => {
@@ -138,25 +209,37 @@ export default function App() {
         return false;
       }
 
-      // 3. Period Filter
-      const ticketDate = new Date(ticket.createdAt);
-      const referenceDate = new Date();
-      
-      if (selectedPeriod === 'today') {
-        const ticketLocalStr = ticketDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-        const refLocalStr = referenceDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
-        if (ticketLocalStr !== refLocalStr) return false;
-      } else if (selectedPeriod === '7days') {
-        const diffTime = Math.abs(referenceDate.getTime() - ticketDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays > 7) return false;
-      } else if (selectedPeriod === '30days') {
-        const diffTime = Math.abs(referenceDate.getTime() - ticketDate.getTime());
-        const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
-        if (diffDays > 30) return false;
+      // 3. Agent Filter ("Quem enviou")
+      if (selectedAgent && formatAgentName(ticket.agentName) !== selectedAgent) {
+        return false;
       }
 
-      // 4. Text Search Filter
+      // 4. Specific Month Filter
+      if (selectedMonth && getTicketMonthYear(ticket.createdAt) !== selectedMonth) {
+        return false;
+      }
+
+      // 5. Period Range Filter
+      if (!selectedMonth) {
+        const ticketDate = new Date(ticket.createdAt);
+        const referenceDate = new Date();
+        
+        if (selectedPeriod === 'today') {
+          const ticketLocalStr = ticketDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+          const refLocalStr = referenceDate.toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' });
+          if (ticketLocalStr !== refLocalStr) return false;
+        } else if (selectedPeriod === '7days') {
+          const diffTime = Math.abs(referenceDate.getTime() - ticketDate.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          if (diffDays > 7) return false;
+        } else if (selectedPeriod === '30days') {
+          const diffTime = Math.abs(referenceDate.getTime() - ticketDate.getTime());
+          const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+          if (diffDays > 30) return false;
+        }
+      }
+
+      // 6. Text Search Filter
       if (searchTerm.trim() !== '') {
         const searchLower = searchTerm.toLowerCase();
         const matchesClient = ticket.clientName?.toLowerCase().includes(searchLower);
@@ -171,7 +254,7 @@ export default function App() {
 
       return true;
     });
-  }, [tickets, searchTerm, selectedTeam, selectedPeriod, selectedWord]);
+  }, [tickets, searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth]);
 
   // Derived Performance Metrics (no SLA/CSAT as requested)
   const metrics = useMemo(() => {
@@ -213,9 +296,11 @@ export default function App() {
     setSelectedTeam(null);
     setSelectedPeriod('all');
     setSelectedWord(null);
+    setSelectedAgent(null);
+    setSelectedMonth(null);
   };
 
-  const hasActiveFilters = searchTerm !== '' || selectedTeam !== null || selectedPeriod !== 'all' || selectedWord !== null;
+  const hasActiveFilters = searchTerm !== '' || selectedTeam !== null || selectedPeriod !== 'all' || selectedWord !== null || selectedAgent !== null || selectedMonth !== null;
 
   return (
     <div className="min-h-screen bg-slate-50 text-obsidian-black font-sans antialiased flex flex-col selection:bg-electric-rose/10 selection:text-electric-rose">
@@ -335,8 +420,8 @@ export default function App() {
                 )}
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                {/* Search input (matches client, company, keywords) */}
+              <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+                {/* Search input */}
                 <div className="col-span-12 md:col-span-4 relative">
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
                     Buscar por Conteúdo
@@ -347,7 +432,7 @@ export default function App() {
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Nome do cliente, telefone, termo ou solicitação..."
+                      placeholder="Cliente, telefone, termo ou chamado..."
                       className="w-full text-sm pl-10 pr-4 py-2.5 bg-slate-50/50 hover:bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-electric-rose/20 focus:border-electric-rose font-sans text-slate-800 transition-all"
                     />
                   </div>
@@ -370,19 +455,39 @@ export default function App() {
                   </select>
                 </div>
 
-                {/* Period Range Tabs Filter */}
+                {/* Agent/Assessor Dropdown Filter */}
                 <div className="col-span-12 sm:col-span-6 md:col-span-4">
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                    Intervalo Temporal
+                    Solicitação enviada por:
+                  </label>
+                  <select
+                    value={selectedAgent || ''}
+                    onChange={(e) => setSelectedAgent(e.target.value || null)}
+                    className="w-full text-sm py-2.5 px-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-electric-rose/20 focus:border-electric-rose font-sans text-slate-800 transition-all cursor-pointer"
+                  >
+                    <option value="">Todos os Assessores</option>
+                    {uniqueAgents.map(a => (
+                      <option key={a} value={a}>{a}</option>
+                    ))}
+                  </select>
+                </div>
+
+                {/* Period Range Tabs Filter */}
+                <div className="col-span-12 md:col-span-6">
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                    Intervalo Temporal Rápido
                   </label>
                   <div className="grid grid-cols-4 bg-slate-100 p-1 rounded-xl border border-slate-200/60">
                     {(['all', 'today', '7days', '30days'] as const).map((period) => (
                       <button
                         key={period}
-                        onClick={() => setSelectedPeriod(period)}
+                        onClick={() => {
+                          setSelectedPeriod(period);
+                          setSelectedMonth(null); // Clear specific month if temporal tabs are clicked
+                        }}
                         className={`
                           py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer text-center capitalize
-                          ${selectedPeriod === period 
+                          ${selectedPeriod === period && !selectedMonth
                             ? 'bg-white text-obsidian-black shadow-xs font-extrabold' 
                             : 'text-slate-500 hover:text-obsidian-black'
                           }
@@ -395,6 +500,29 @@ export default function App() {
                       </button>
                     ))}
                   </div>
+                </div>
+
+                {/* Specific Month Dropdown Filter */}
+                <div className="col-span-12 md:col-span-6">
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                    Análise Mensal (Histórico)
+                  </label>
+                  <select
+                    value={selectedMonth || ''}
+                    onChange={(e) => {
+                      const val = e.target.value || null;
+                      setSelectedMonth(val);
+                      if (val) {
+                        setSelectedPeriod('all'); // Clear fast period tabs if monthly filter is engaged
+                      }
+                    }}
+                    className="w-full text-sm py-2.5 px-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-electric-rose/20 focus:border-electric-rose font-sans text-slate-800 transition-all cursor-pointer"
+                  >
+                    <option value="">Filtrar por Mês Específico (Todos)</option>
+                    {uniqueMonths.map(m => (
+                      <option key={m} value={m}>{m}</option>
+                    ))}
+                  </select>
                 </div>
               </div>
 
@@ -412,7 +540,21 @@ export default function App() {
                     </span>
                   )}
 
-                  {selectedPeriod !== 'all' && (
+                  {selectedAgent && (
+                    <span className="inline-flex items-center px-3 py-1 bg-slate-900 text-white rounded-full text-xs font-medium space-x-1.5 border border-slate-950">
+                      <span>Enviado por: {selectedAgent}</span>
+                      <button onClick={() => setSelectedAgent(null)} className="hover:text-electric-rose cursor-pointer font-bold">×</button>
+                    </span>
+                  )}
+
+                  {selectedMonth && (
+                    <span className="inline-flex items-center px-3 py-1 bg-slate-900 text-white rounded-full text-xs font-medium space-x-1.5 border border-slate-950">
+                      <span>Mês: {selectedMonth}</span>
+                      <button onClick={() => setSelectedMonth(null)} className="hover:text-electric-rose cursor-pointer font-bold">×</button>
+                    </span>
+                  )}
+
+                  {selectedPeriod !== 'all' && !selectedMonth && (
                     <span className="inline-flex items-center px-3 py-1 bg-slate-900 text-white rounded-full text-xs font-medium space-x-1.5 border border-slate-950">
                       <span>
                         Período: {selectedPeriod === 'today' && 'Hoje'}
@@ -529,6 +671,30 @@ export default function App() {
 
             </div>
 
+            {/* 4.5. Composition Analysis Row */}
+            <div className="grid grid-cols-1 gap-6">
+              
+              {/* Priority Composition Chart (Full width, centered) */}
+              <section className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs flex flex-col">
+                <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+                  <div className="flex items-center space-x-2">
+                    <ShieldAlert className="w-4 h-4 text-electric-rose" />
+                    <h2 className="text-sm font-extrabold text-obsidian-black uppercase tracking-wider">
+                      Perfil de Criticidade (Prioridade)
+                    </h2>
+                  </div>
+                  <span className="text-[10px] font-mono bg-slate-100 text-slate-600 px-2 py-0.5 rounded border border-slate-200/50">
+                    COMPOSITION
+                  </span>
+                </div>
+                
+                <div className="max-w-2xl mx-auto w-full">
+                  <PriorityPieChart filteredTickets={filteredTickets} />
+                </div>
+              </section>
+
+            </div>
+
             {/* 5. Highlight Section: Latest Urgent Tickets (No IDs printed) */}
             <section id="urgent-tickets-feed" className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
               <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
@@ -555,7 +721,6 @@ export default function App() {
               ) : (
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   {urgentTickets.slice(0, 4).map((ticket) => {
-                    const timeStr = new Date(ticket.createdAt).toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit', timeZone: 'America/Sao_Paulo' });
                     const dateStr = new Date(ticket.createdAt).toLocaleDateString('pt-BR', { day: '2-digit', month: '2-digit', timeZone: 'America/Sao_Paulo' });
                     
                     return (
@@ -579,7 +744,7 @@ export default function App() {
                             </span>
                             <span className="text-[11px] font-mono text-slate-400 flex items-center space-x-1">
                               <Calendar className="w-3 h-3 text-slate-300 inline shrink-0" />
-                              <span>{dateStr} às {timeStr}</span>
+                              <span>{dateStr}</span>
                             </span>
                           </div>
 
@@ -601,6 +766,11 @@ export default function App() {
                               {ticket.clientName.charAt(0)}
                             </div>
                             <span className="font-semibold truncate max-w-[150px]">{ticket.clientName}</span>
+                            {recurringClients.has(ticket.clientName?.trim().toUpperCase()) && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0 ml-1 whitespace-nowrap" title="Cliente recorrente com múltiplos atendimentos">
+                                ⚠️ Reincidente
+                              </span>
+                            )}
                             {ticket.phone && (
                               <>
                                 <span className="text-slate-300">|</span>
@@ -664,8 +834,6 @@ export default function App() {
                           const ticketDateStr = new Date(ticket.createdAt).toLocaleDateString('pt-BR', {
                             day: '2-digit',
                             month: '2-digit',
-                            hour: '2-digit',
-                            minute: '2-digit',
                             timeZone: 'America/Sao_Paulo'
                           });
 
@@ -688,7 +856,14 @@ export default function App() {
                               {/* Client details */}
                               <td className="py-3.5 px-4">
                                 <div className="flex flex-col">
-                                  <span className="font-semibold text-slate-800">{ticket.clientName}</span>
+                                  <div className="flex items-center gap-1.5">
+                                    <span className="font-semibold text-slate-800">{ticket.clientName}</span>
+                                    {recurringClients.has(ticket.clientName?.trim().toUpperCase()) && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0 whitespace-nowrap" title="Este cliente possui múltiplos chamados na base">
+                                        ⚠️ Reincidente
+                                      </span>
+                                    )}
+                                  </div>
                                   {ticket.phone && (
                                     <span className="text-[11px] text-slate-400 font-mono" title={ticket.phone}>
                                       {ticket.phone}
