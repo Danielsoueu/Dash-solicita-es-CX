@@ -157,6 +157,7 @@ export function parseGoogleSheetsCSV(csvText: string): Ticket[] {
     const arquivos = cells[6] || '';
     const agentName = cells[7] || 'Suporte';
     const rawDate = cells[8] || '';
+    const columnKValue = cells[10] || '';
     
     const createdAt = parsePortugueseDate(rawDate);
     const keyWords = extractKeywords(description);
@@ -193,7 +194,8 @@ export function parseGoogleSheetsCSV(csvText: string): Ticket[] {
       agentName,
       createdAt,
       chatLog,
-      keyWords
+      keyWords,
+      columnKValue
     });
   }
 

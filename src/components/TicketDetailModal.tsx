@@ -11,9 +11,17 @@ import { X, Calendar, User, Phone, ExternalLink, Briefcase, Paperclip } from 'lu
 interface TicketDetailModalProps {
   ticket: Ticket | null;
   onClose: () => void;
+  onToggleInputError?: (ticketId: string, value: boolean) => void;
+  onToggleRoutingError?: (ticketId: string, value: boolean) => void;
 }
 
-export default function TicketDetailModal({ ticket, onClose }: TicketDetailModalProps) {
+export default function TicketDetailModal({ 
+  ticket, 
+  onClose,
+  onToggleInputError,
+  onToggleRoutingError
+}: TicketDetailModalProps) {
+
   if (!ticket) return null;
 
   const formatDate = (isoStr: string) => {
@@ -58,7 +66,7 @@ export default function TicketDetailModal({ ticket, onClose }: TicketDetailModal
           animate={{ opacity: 1, scale: 1, y: 0 }}
           exit={{ opacity: 0, scale: 0.95, y: 20 }}
           transition={{ type: 'spring', duration: 0.5 }}
-          className="relative bg-white rounded-2xl w-full max-w-2xl shadow-2xl border border-slate-200 overflow-hidden z-10"
+          className="relative bg-white rounded-2xl w-full max-w-2xl shadow-2xl border border-slate-200 overflow-hidden z-10 my-8"
         >
           {/* Header */}
           <div className="bg-obsidian-black text-white px-6 py-4 flex items-center justify-between border-b border-slate-800">
@@ -80,7 +88,7 @@ export default function TicketDetailModal({ ticket, onClose }: TicketDetailModal
           </div>
 
           {/* Modal Content */}
-          <div className="p-6 space-y-6">
+          <div className="p-6 space-y-5 max-h-[calc(100vh-180px)] overflow-y-auto">
             
             {/* Main Client Request Card */}
             <div className="bg-slate-50 p-4 rounded-xl border border-slate-200/60">
@@ -165,9 +173,61 @@ export default function TicketDetailModal({ ticket, onClose }: TicketDetailModal
 
             </div>
 
+            {/* Quality Control Status Section */}
+            <div className="pt-4 border-t border-slate-150 space-y-3">
+              <h4 className="text-[11.5px] font-extrabold text-slate-500 uppercase tracking-wider">
+                Status de Qualidade de Dados (Heurística Automática)
+              </h4>
+              <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+                {/* Status Input Error */}
+                <div
+                  className={`flex items-center justify-between p-3.5 rounded-xl border text-left ${
+                    ticket.hasInputError 
+                      ? 'bg-red-50/80 border-red-200 text-red-900 shadow-sm shadow-red-100/50' 
+                      : 'bg-emerald-50/60 border-emerald-100 text-emerald-900'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <span className="text-lg shrink-0">{ticket.hasInputError ? "🚫" : "✅"}</span>
+                    <div>
+                      <div className="text-xs font-bold flex items-center gap-1">
+                        Erro de Entrada de Dados
+                        {ticket.hasInputError && <span className="w-1.5 h-1.5 bg-red-500 rounded-full animate-pulse"></span>}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-medium">
+                        {ticket.hasInputError ? "Contatos incorretos/incompletos" : "Telefone e dados válidos"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Status Routing Error */}
+                <div
+                  className={`flex items-center justify-between p-3.5 rounded-xl border text-left ${
+                    ticket.hasRoutingError 
+                      ? 'bg-indigo-50/80 border-indigo-200 text-indigo-900 shadow-sm shadow-indigo-100/50' 
+                      : 'bg-emerald-50/60 border-emerald-100 text-emerald-900'
+                  }`}
+                >
+                  <div className="flex items-center space-x-2.5">
+                    <span className="text-lg shrink-0">{ticket.hasRoutingError ? "🔀" : "✅"}</span>
+                    <div>
+                      <div className="text-xs font-bold flex items-center gap-1">
+                        Erro de Direcionamento
+                        {ticket.hasRoutingError && <span className="w-1.5 h-1.5 bg-indigo-500 rounded-full animate-pulse"></span>}
+                      </div>
+                      <div className="text-[10px] text-slate-500 font-medium">
+                        {ticket.hasRoutingError ? "Encaminhado incorretamente" : "Direcionamento correto"}
+                      </div>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
             {/* Keyword Tags */}
             {ticket.keyWords && ticket.keyWords.length > 0 && (
-              <div className="pt-4 border-t border-slate-100">
+              <div className="pt-3 border-t border-slate-100">
                 <h4 className="text-[11px] font-bold text-slate-400 uppercase tracking-wider mb-2">
                   Tópicos Relacionados
                 </h4>
@@ -190,7 +250,7 @@ export default function TicketDetailModal({ ticket, onClose }: TicketDetailModal
           <div className="bg-slate-50 px-6 py-4 border-t border-slate-100 flex justify-end">
             <button
               onClick={onClose}
-              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl cursor-pointer transition-all"
+              className="px-4 py-2 bg-slate-900 hover:bg-slate-800 text-white font-bold text-xs rounded-xl cursor-pointer transition-all active:scale-95"
             >
               Fechar Detalhes
             </button>

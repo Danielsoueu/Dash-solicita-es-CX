@@ -22,6 +22,11 @@ export interface Ticket {
   createdAt: string; // ISO string
   chatLog: ChatMessage[];
   keyWords: string[];
+  
+  // Custom manual or auto-detected flags
+  hasInputError?: boolean;
+  hasRoutingError?: boolean;
+  columnKValue?: string;
 }
 
 export interface WordCloudItem {

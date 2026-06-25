@@ -51,6 +51,26 @@ export default function App() {
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<string | null>(null);
   const [showOnlyRecurring, setShowOnlyRecurring] = useState(false);
+  const [showOnlyInputError, setShowOnlyInputError] = useState(false);
+  const [showOnlyRoutingError, setShowOnlyRoutingError] = useState(false);
+
+  // Load ticket modifications (manual error overrides) from localStorage
+  const [ticketModifications, setTicketModifications] = useState<Record<string, {
+    hasInputError?: boolean;
+    hasRoutingError?: boolean;
+  }>>(() => {
+    try {
+      const saved = localStorage.getItem('hero_ticket_modifications');
+      return saved ? JSON.parse(saved) : {};
+    } catch (e) {
+      return {};
+    }
+  });
+
+  // Save changes to localStorage when ticketModifications is updated
+  useEffect(() => {
+    localStorage.setItem('hero_ticket_modifications', JSON.stringify(ticketModifications));
+  }, [ticketModifications]);
   
   // Selected Ticket for Modal Details
   const [selectedTicketId, setSelectedTicketId] = useState<string | null>(null);
@@ -110,7 +130,101 @@ export default function App() {
   // Reset pagination to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth, selectedPriority, showOnlyRecurring]);
+  }, [searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth, selectedPriority, showOnlyRecurring, showOnlyInputError, showOnlyRoutingError]);
+
+  // Pure function to apply heuristic automatic error detection merged with manual modifications
+  const applyModificationsAndHeuristics = (rawTickets: Ticket[], mods: Record<string, any>): Ticket[] => {
+    return rawTickets.map(ticket => {
+      // 1. Heuristics for "Erro de Entrada" (Data Input Error)
+      let hasInputError = false;
+      const cleanPhone = ticket.phone ? ticket.phone.replace(/\D/g, '') : '';
+      
+      if (!ticket.phone || ticket.phone.trim() === '' || ticket.phone.toLowerCase().includes('não informado') || ticket.phone.toLowerCase().includes('sem telefone')) {
+        hasInputError = true;
+      } else if (cleanPhone.length < 8) {
+        hasInputError = true;
+      } else if (/^(\d)\1+$/.test(cleanPhone)) { // repetitive digits like 99999999 or 00000000
+        hasInputError = true;
+      }
+      
+      const descLower = (ticket.description || '').toLowerCase();
+      const inputErrorWords = [
+        'telefone errado', 'número inválido', 'não atende', 'sem contato', 
+        'dados incorretos', 'cadastro desatualizado', 'email inválido', 
+        'dados incompletos', 'contato inválido', 'número incorreto',
+        'sem telefone', 'contato errado', 'telefone incorreto'
+      ];
+      if (inputErrorWords.some(word => descLower.includes(word))) {
+        hasInputError = true;
+      }
+
+      // 2. Heuristics for "Erro de Direcionamento" (Routing Error)
+      let hasRoutingError = false;
+      
+      // Automatic detection via Column K value
+      if (ticket.columnKValue && ticket.columnKValue.trim() !== '') {
+        hasRoutingError = true;
+      }
+
+      const routingErrorWords = [
+        'direcionamento incorreto', 'time errado', 'equipe errada', 
+        'enviado para o time errado', 'setor incorreto', 'mudar de equipe',
+        'direcionado incorreto', 'direcionado errado', 'setor errado', 'redirecionar'
+      ];
+      if (routingErrorWords.some(word => descLower.includes(word))) {
+        hasRoutingError = true;
+      }
+
+      // Dynamic conflict checking between assigned team and description keywords
+      const teamLower = (ticket.team || '').toLowerCase();
+      if (teamLower.includes('cobrança') || teamLower.includes('financeiro')) {
+        const productKeywords = ['bug', 'erro no sistema', 'instabilidade', 'plataforma fora do ar', 'aplicativo não abre'];
+        if (productKeywords.some(kw => descLower.includes(kw))) {
+          hasRoutingError = true;
+        }
+      } else if (teamLower.includes('parcerias') || teamLower.includes('comercial')) {
+        const billingKeywords = ['cobrança indevida', 'estorno', 'boleto em aberto', 'nota fiscal', 'pagamento pendente'];
+        if (billingKeywords.some(kw => descLower.includes(kw))) {
+          hasRoutingError = true;
+        }
+      }
+
+      // Merge with manual modifications
+      const ticketMod = mods[ticket.id] || {};
+      
+      return {
+        ...ticket,
+        hasInputError: ticketMod.hasInputError !== undefined ? ticketMod.hasInputError : hasInputError,
+        hasRoutingError: ticketMod.hasRoutingError !== undefined ? ticketMod.hasRoutingError : hasRoutingError
+      };
+    });
+  };
+
+  // Compute final enhanced tickets list with automatic and manual properties
+  const enhancedTickets = useMemo(() => {
+    return applyModificationsAndHeuristics(tickets, ticketModifications);
+  }, [tickets, ticketModifications]);
+
+  // Action Handlers for Quality Control Updates
+  const handleToggleInputError = (ticketId: string, value: boolean) => {
+    setTicketModifications(prev => ({
+      ...prev,
+      [ticketId]: {
+        ...prev[ticketId],
+        hasInputError: value
+      }
+    }));
+  };
+
+  const handleToggleRoutingError = (ticketId: string, value: boolean) => {
+    setTicketModifications(prev => ({
+      ...prev,
+      [ticketId]: {
+        ...prev[ticketId],
+        hasRoutingError: value
+      }
+    }));
+  };
 
   // Fetch spreadsheet data at startup
   useEffect(() => {
@@ -164,24 +278,24 @@ export default function App() {
 
   // Find the currently open ticket object
   const activeTicket = useMemo(() => {
-    return tickets.find(t => t.id === selectedTicketId) || null;
-  }, [tickets, selectedTicketId]);
+    return enhancedTickets.find(t => t.id === selectedTicketId) || null;
+  }, [enhancedTickets, selectedTicketId]);
 
   // Dynamic set of all unique teams
   const uniqueTeams = useMemo(() => {
     const teamsSet = new Set<string>();
-    tickets.forEach(t => {
+    enhancedTickets.forEach(t => {
       if (t.team) {
         teamsSet.add(t.team);
       }
     });
     return Array.from(teamsSet).sort();
-  }, [tickets]);
+  }, [enhancedTickets]);
 
   // Unique list of frontline assessors ("Quem enviou")
   const uniqueAgents = useMemo(() => {
     const agentsSet = new Set<string>();
-    tickets.forEach(t => {
+    enhancedTickets.forEach(t => {
       if (t.agentName) {
         const cleanName = formatAgentName(t.agentName);
         if (cleanName) {
@@ -190,12 +304,12 @@ export default function App() {
       }
     });
     return Array.from(agentsSet).filter(Boolean).sort();
-  }, [tickets]);
+  }, [enhancedTickets]);
 
   // Chronologically ordered months from the sheet history
   const uniqueMonths = useMemo(() => {
     const orderedMonths: string[] = [];
-    const sortedTickets = [...tickets].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+    const sortedTickets = [...enhancedTickets].sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
     sortedTickets.forEach(t => {
       if (t.createdAt) {
         const m = getTicketMonthYear(t.createdAt);
@@ -205,12 +319,12 @@ export default function App() {
       }
     });
     return orderedMonths;
-  }, [tickets]);
+  }, [enhancedTickets]);
 
   // Identify recurring clients based on frequency > 1 in the raw base
   const recurringClients = useMemo(() => {
     const counts: Record<string, number> = {};
-    tickets.forEach(t => {
+    enhancedTickets.forEach(t => {
       if (t.clientName) {
         const norm = t.clientName.trim().toUpperCase();
         counts[norm] = (counts[norm] || 0) + 1;
@@ -223,11 +337,11 @@ export default function App() {
       }
     });
     return recurring;
-  }, [tickets]);
+  }, [enhancedTickets]);
 
   // Compute filtered tickets
   const filteredTickets = useMemo(() => {
-    return tickets.filter(ticket => {
+    return enhancedTickets.filter(ticket => {
       // 1. Team Filter
       if (selectedTeam && ticket.team !== selectedTeam) {
         return false;
@@ -278,6 +392,16 @@ export default function App() {
         return false;
       }
 
+      // 5.7. Show Only Input Error Filter
+      if (showOnlyInputError && !ticket.hasInputError) {
+        return false;
+      }
+
+      // 5.8. Show Only Routing Error Filter
+      if (showOnlyRoutingError && !ticket.hasRoutingError) {
+        return false;
+      }
+
       // 6. Text Search Filter
       if (searchTerm.trim() !== '') {
         const searchLower = searchTerm.toLowerCase();
@@ -293,7 +417,7 @@ export default function App() {
 
       return true;
     });
-  }, [tickets, searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth, selectedPriority, showOnlyRecurring, recurringClients]);
+  }, [enhancedTickets, searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth, selectedPriority, showOnlyRecurring, showOnlyInputError, showOnlyRoutingError, recurringClients]);
 
   // Derived Performance Metrics (including Recurrence Rate)
   const metrics = useMemo(() => {
@@ -304,10 +428,15 @@ export default function App() {
     const recurringFilteredCount = uniqueFilteredClients.filter(name => recurringClients.has(name)).length;
     const recurrenceRate = uniqueFilteredClients.length > 0 ? Math.round((recurringFilteredCount / uniqueFilteredClients.length) * 100) : 0;
 
+    const inputErrorCount = filteredTickets.filter(t => t.hasInputError).length;
+    const routingErrorCount = filteredTickets.filter(t => t.hasRoutingError).length;
+
     return {
       totalCount,
       urgentCount,
-      recurrenceRate
+      recurrenceRate,
+      inputErrorCount,
+      routingErrorCount
     };
   }, [filteredTickets, recurringClients]);
 
@@ -344,9 +473,11 @@ export default function App() {
     setSelectedMonth(null);
     setSelectedPriority(null);
     setShowOnlyRecurring(false);
+    setShowOnlyInputError(false);
+    setShowOnlyRoutingError(false);
   };
 
-  const hasActiveFilters = searchTerm !== '' || selectedTeam !== null || selectedPeriod !== 'all' || selectedWord !== null || selectedAgent !== null || selectedMonth !== null || selectedPriority !== null || showOnlyRecurring;
+  const hasActiveFilters = searchTerm !== '' || selectedTeam !== null || selectedPeriod !== 'all' || selectedWord !== null || selectedAgent !== null || selectedMonth !== null || selectedPriority !== null || showOnlyRecurring || showOnlyInputError || showOnlyRoutingError;
 
   return (
     <div className="min-h-screen bg-slate-50 text-obsidian-black font-sans antialiased flex flex-col selection:bg-electric-rose/10 selection:text-electric-rose">
@@ -592,24 +723,63 @@ export default function App() {
                   </select>
                 </div>
 
-                {/* Checkbox Recorrentes */}
-                <div className="col-span-12 flex items-center bg-amber-50/40 border border-amber-100 p-3 rounded-xl mt-1">
-                  <label className="flex items-center space-x-3 cursor-pointer select-none">
+                {/* Checkboxes de Qualidade e Recorrência */}
+                <div className="col-span-12 grid grid-cols-1 md:grid-cols-3 gap-4 mt-1 bg-slate-50/50 border border-slate-200 p-4 rounded-xl">
+                  
+                  {/* Checkbox Recorrentes */}
+                  <label className="flex items-start space-x-3 cursor-pointer select-none">
                     <input
                       type="checkbox"
                       checked={showOnlyRecurring}
                       onChange={(e) => setShowOnlyRecurring(e.target.checked)}
-                      className="w-4.5 h-4.5 rounded border-slate-300 text-electric-rose focus:ring-electric-rose/20 accent-electric-rose cursor-pointer"
+                      className="w-4.5 h-4.5 rounded mt-0.5 border-slate-300 text-electric-rose focus:ring-electric-rose/20 accent-electric-rose cursor-pointer shrink-0"
                     />
                     <div>
-                      <span className="text-sm font-bold text-slate-800">
-                        ⚠️ Exibir apenas clientes reincidentes
+                      <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                        ⚠️ Clientes Reincidentes
                       </span>
-                      <p className="text-[11px] text-slate-500">
-                        Oculta chamados comuns e foca exclusivamente em clientes com múltiplos atendimentos na base histórica.
+                      <p className="text-[11px] text-slate-500 leading-tight">
+                        Focar exclusivamente em clientes com múltiplos atendimentos históricos.
                       </p>
                     </div>
                   </label>
+
+                  {/* Checkbox Erro de Entrada */}
+                  <label className="flex items-start space-x-3 cursor-pointer select-none border-t md:border-t-0 md:border-l border-slate-200 pt-3 md:pt-0 md:pl-4">
+                    <input
+                      type="checkbox"
+                      checked={showOnlyInputError}
+                      onChange={(e) => setShowOnlyInputError(e.target.checked)}
+                      className="w-4.5 h-4.5 rounded mt-0.5 border-slate-300 text-electric-rose focus:ring-electric-rose/20 accent-electric-rose cursor-pointer shrink-0"
+                    />
+                    <div>
+                      <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                        🚫 Erro de Entrada de Dados
+                      </span>
+                      <p className="text-[11px] text-slate-500 leading-tight">
+                        Exibir chamados com telefones inválidos, vazios ou descrição com erro de contato.
+                      </p>
+                    </div>
+                  </label>
+
+                  {/* Checkbox Erro de Direcionamento */}
+                  <label className="flex items-start space-x-3 cursor-pointer select-none border-t md:border-t-0 md:border-l border-slate-200 pt-3 md:pt-0 md:pl-4">
+                    <input
+                      type="checkbox"
+                      checked={showOnlyRoutingError}
+                      onChange={(e) => setShowOnlyRoutingError(e.target.checked)}
+                      className="w-4.5 h-4.5 rounded mt-0.5 border-slate-300 text-electric-rose focus:ring-electric-rose/20 accent-electric-rose cursor-pointer shrink-0"
+                    />
+                    <div>
+                      <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
+                        🔀 Erro de Direcionamento
+                      </span>
+                      <p className="text-[11px] text-slate-500 leading-tight">
+                        Exibir chamados enviados para equipes inadequadas ou incompatíveis.
+                      </p>
+                    </div>
+                  </label>
+
                 </div>
               </div>
 
@@ -670,6 +840,20 @@ export default function App() {
                     <span className="inline-flex items-center px-3 py-1 bg-amber-500 text-white rounded-full text-xs font-medium space-x-1.5 shadow-xs shadow-amber-500/10">
                       <span>Apenas Reincidentes</span>
                       <button onClick={() => setShowOnlyRecurring(false)} className="hover:text-white/80 cursor-pointer font-bold">×</button>
+                    </span>
+                  )}
+
+                  {showOnlyInputError && (
+                    <span className="inline-flex items-center px-3 py-1 bg-red-500 text-white rounded-full text-xs font-medium space-x-1.5 shadow-xs shadow-red-500/10">
+                      <span>Apenas Erro de Entrada</span>
+                      <button onClick={() => setShowOnlyInputError(false)} className="hover:text-white/80 cursor-pointer font-bold">×</button>
+                    </span>
+                  )}
+
+                  {showOnlyRoutingError && (
+                    <span className="inline-flex items-center px-3 py-1 bg-indigo-500 text-white rounded-full text-xs font-medium space-x-1.5 shadow-xs shadow-indigo-500/10">
+                      <span>Apenas Erro de Direcionamento</span>
+                      <button onClick={() => setShowOnlyRoutingError(false)} className="hover:text-white/80 cursor-pointer font-bold">×</button>
                     </span>
                   )}
 
@@ -740,6 +924,101 @@ export default function App() {
                 </div>
               </div>
 
+            </section>
+
+            {/* 3.5. Auditoria de Qualidade de Dados (Erros identificados) */}
+            <section id="quality-audit-section" className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
+              <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
+                <div className="flex items-center space-x-2">
+                  <span className="text-base">🛡️</span>
+                  <h2 className="text-sm font-extrabold text-obsidian-black uppercase tracking-wider">
+                    Auditoria de Qualidade e Erros de Atendimento
+                  </h2>
+                </div>
+                <span className="text-[10px] font-bold text-slate-400 bg-slate-100 px-2 py-0.5 rounded uppercase">
+                  Diagnóstico Automático + Manual
+                </span>
+              </div>
+
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-5">
+                {/* Erros de Entrada */}
+                <div 
+                  onClick={() => setShowOnlyInputError(!showOnlyInputError)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer select-none active:scale-98 relative overflow-hidden group ${
+                    showOnlyInputError 
+                      ? 'bg-red-50/85 border-red-200 text-red-900 shadow-xs' 
+                      : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50 text-slate-800'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                        Erros de Entrada de Dados
+                      </span>
+                      <div className="flex items-baseline space-x-2">
+                        <span className="text-4xl font-black font-mono tracking-tight text-red-600">
+                          {metrics.inputErrorCount}
+                        </span>
+                        <span className="text-xs text-slate-500 font-semibold">
+                          ({metrics.totalCount > 0 ? Math.round((metrics.inputErrorCount / metrics.totalCount) * 100) : 0}% dos chamados)
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-2xl">🚫</span>
+                  </div>
+                  
+                  {/* Progress Indicator */}
+                  <div className="mt-3 w-full bg-slate-200/60 rounded-full h-1.5 overflow-hidden">
+                    <div 
+                      className="bg-red-500 h-full transition-all duration-500"
+                      style={{ width: `${metrics.totalCount > 0 ? Math.min(100, (metrics.inputErrorCount / metrics.totalCount) * 100) : 0}%` }}
+                    />
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 mt-2 font-medium leading-relaxed">
+                    Clientes sem telefone válido ou sinalização de contato inválido na solicitação. {showOnlyInputError ? '👉 Clique para desativar filtro.' : '👉 Clique para filtrar chamados com este erro.'}
+                  </p>
+                </div>
+
+                {/* Erros de Direcionamento */}
+                <div 
+                  onClick={() => setShowOnlyRoutingError(!showOnlyRoutingError)}
+                  className={`p-4 rounded-xl border transition-all cursor-pointer select-none active:scale-98 relative overflow-hidden group ${
+                    showOnlyRoutingError 
+                      ? 'bg-indigo-50/85 border-indigo-200 text-indigo-900 shadow-xs' 
+                      : 'bg-slate-50/50 border-slate-200 hover:bg-slate-50 text-slate-800'
+                  }`}
+                >
+                  <div className="flex items-start justify-between">
+                    <div>
+                      <span className="text-xs font-bold text-slate-400 uppercase tracking-wider block mb-1">
+                        Erros de Direcionamento
+                      </span>
+                      <div className="flex items-baseline space-x-2">
+                        <span className="text-4xl font-black font-mono tracking-tight text-indigo-600">
+                          {metrics.routingErrorCount}
+                        </span>
+                        <span className="text-xs text-slate-500 font-semibold">
+                          ({metrics.totalCount > 0 ? Math.round((metrics.routingErrorCount / metrics.totalCount) * 100) : 0}% dos chamados)
+                        </span>
+                      </div>
+                    </div>
+                    <span className="text-2xl">🔀</span>
+                  </div>
+                  
+                  {/* Progress Indicator */}
+                  <div className="mt-3 w-full bg-slate-200/60 rounded-full h-1.5 overflow-hidden">
+                    <div 
+                      className="bg-indigo-500 h-full transition-all duration-500"
+                      style={{ width: `${metrics.totalCount > 0 ? Math.min(100, (metrics.routingErrorCount / metrics.totalCount) * 100) : 0}%` }}
+                    />
+                  </div>
+
+                  <p className="text-[11px] text-slate-500 mt-2 font-medium leading-relaxed">
+                    Chamados direcionados para equipes inadequadas baseando-se no texto descritivo. {showOnlyRoutingError ? '👉 Clique para desativar filtro.' : '👉 Clique para filtrar chamados com este erro.'}
+                  </p>
+                </div>
+              </div>
             </section>
 
             {/* 4. Bento Grid: Teams performance + Word Cloud */}
@@ -890,6 +1169,16 @@ export default function App() {
                                 ⚠️ Reincidente
                               </span>
                             )}
+                            {ticket.hasInputError && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-700 border border-red-200 shrink-0 ml-1 whitespace-nowrap" title="Esta solicitação possui erros na inserção de dados">
+                                🚫 Entrada
+                              </span>
+                            )}
+                            {ticket.hasRoutingError && (
+                              <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0 ml-1 whitespace-nowrap" title="Esta solicitação possui erros de direcionamento">
+                                🔀 Direcionamento
+                              </span>
+                            )}
                             {ticket.phone && (
                               <>
                                 <span className="text-slate-300">|</span>
@@ -975,11 +1264,21 @@ export default function App() {
                               {/* Client details */}
                               <td className="py-3.5 px-4">
                                 <div className="flex flex-col">
-                                  <div className="flex items-center gap-1.5">
+                                  <div className="flex items-center gap-1.5 flex-wrap">
                                     <span className="font-semibold text-slate-800">{ticket.clientName}</span>
                                     {recurringClients.has(ticket.clientName?.trim().toUpperCase()) && (
                                       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0 whitespace-nowrap" title="Este cliente possui múltiplos chamados na base">
                                         ⚠️ Reincidente
+                                      </span>
+                                    )}
+                                    {ticket.hasInputError && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-700 border border-red-200 shrink-0 whitespace-nowrap" title="Esta solicitação possui erros na inserção de dados">
+                                        🚫 Entrada
+                                      </span>
+                                    )}
+                                    {ticket.hasRoutingError && (
+                                      <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0 whitespace-nowrap" title="Esta solicitação possui erros de direcionamento">
+                                        🔀 Direcionamento
                                       </span>
                                     )}
                                   </div>
@@ -1092,6 +1391,8 @@ export default function App() {
       <TicketDetailModal 
         ticket={activeTicket} 
         onClose={() => setSelectedTicketId(null)} 
+        onToggleInputError={handleToggleInputError}
+        onToggleRoutingError={handleToggleRoutingError}
       />
 
       {/* Modern High-Contrast Footer following Brand Book styling */}
