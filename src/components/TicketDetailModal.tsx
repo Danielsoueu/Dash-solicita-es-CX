@@ -6,7 +6,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Ticket } from '../types';
-import { X, Calendar, User, Phone, ExternalLink, Briefcase, Paperclip } from 'lucide-react';
+import { X, Calendar, User, Phone, ExternalLink, Briefcase, Paperclip, AlertCircle, Shuffle, CheckCircle2 } from 'lucide-react';
 
 interface TicketDetailModalProps {
   ticket: Ticket | null;
@@ -188,7 +188,13 @@ export default function TicketDetailModal({
                   }`}
                 >
                   <div className="flex items-center space-x-2.5">
-                    <span className="text-lg shrink-0">{ticket.hasInputError ? "🚫" : "✅"}</span>
+                    <div className="shrink-0">
+                      {ticket.hasInputError ? (
+                        <AlertCircle className="w-5 h-5 text-red-500" />
+                      ) : (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                      )}
+                    </div>
                     <div>
                       <div className="text-xs font-bold flex items-center gap-1">
                         Erro de Entrada de Dados
@@ -210,7 +216,13 @@ export default function TicketDetailModal({
                   }`}
                 >
                   <div className="flex items-center space-x-2.5">
-                    <span className="text-lg shrink-0">{ticket.hasRoutingError ? "🔀" : "✅"}</span>
+                    <div className="shrink-0">
+                      {ticket.hasRoutingError ? (
+                        <Shuffle className="w-5 h-5 text-indigo-500" />
+                      ) : (
+                        <CheckCircle2 className="w-5 h-5 text-emerald-500" />
+                      )}
+                    </div>
                     <div>
                       <div className="text-xs font-bold flex items-center gap-1">
                         Erro de Direcionamento

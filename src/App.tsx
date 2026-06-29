@@ -22,7 +22,10 @@ import {
   Wifi,
   WifiOff,
   ChevronLeft,
-  ChevronRight
+  ChevronRight,
+  AlertCircle,
+  Shuffle,
+  CheckCircle2
 } from 'lucide-react';
 import { Ticket } from './types';
 import { INITIAL_TICKETS } from './data';
@@ -53,6 +56,8 @@ export default function App() {
   const [showOnlyRecurring, setShowOnlyRecurring] = useState(false);
   const [showOnlyInputError, setShowOnlyInputError] = useState(false);
   const [showOnlyRoutingError, setShowOnlyRoutingError] = useState(false);
+  const [showFilters, setShowFilters] = useState(true);
+  const hasInitializedMonth = useRef(false);
 
   // Load ticket modifications (manual error overrides) from localStorage
   const [ticketModifications, setTicketModifications] = useState<Record<string, {
@@ -321,6 +326,16 @@ export default function App() {
     return orderedMonths;
   }, [enhancedTickets]);
 
+  // Set default month to the most recent month once tickets are loaded
+  useEffect(() => {
+    if (uniqueMonths.length > 0 && !hasInitializedMonth.current) {
+      setSelectedMonth(uniqueMonths[0]);
+      if (!isLoading) {
+        hasInitializedMonth.current = true;
+      }
+    }
+  }, [uniqueMonths, isLoading]);
+
   // Identify recurring clients based on frequency > 1 in the raw base
   const recurringClients = useMemo(() => {
     const counts: Record<string, number> = {};
@@ -586,20 +601,33 @@ export default function App() {
                   </h2>
                 </div>
                 
-                {hasActiveFilters && (
+                <div className="flex items-center space-x-2">
+                  {hasActiveFilters && (
+                    <motion.button
+                      whileHover={{ scale: 1.02 }}
+                      whileTap={{ scale: 0.98 }}
+                      onClick={handleResetFilters}
+                      className="flex items-center space-x-1.5 text-xs text-electric-rose hover:text-electric-rose/80 font-bold bg-electric-rose/5 px-2.5 py-1.5 rounded-lg border border-electric-rose/10 cursor-pointer transition-all"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Limpar Filtros</span>
+                    </motion.button>
+                  )}
+
                   <motion.button
                     whileHover={{ scale: 1.02 }}
                     whileTap={{ scale: 0.98 }}
-                    onClick={handleResetFilters}
-                    className="flex items-center space-x-1.5 text-xs text-electric-rose hover:text-electric-rose/80 font-bold bg-electric-rose/5 px-2.5 py-1.5 rounded-lg border border-electric-rose/10 cursor-pointer transition-all"
+                    onClick={() => setShowFilters(!showFilters)}
+                    className="flex items-center space-x-1.5 text-xs text-slate-600 hover:text-slate-800 font-bold bg-slate-100 hover:bg-slate-200/80 px-2.5 py-1.5 rounded-lg border border-slate-200 cursor-pointer transition-all"
                   >
-                    <RotateCcw className="w-3.5 h-3.5" />
-                    <span>Limpar Filtros</span>
+                    <SlidersHorizontal className="w-3 h-3 text-slate-500" />
+                    <span>{showFilters ? 'Esconder Filtros' : 'Mostrar Filtros'}</span>
                   </motion.button>
-                )}
+                </div>
               </div>
 
-              <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
+              {showFilters && (
+                <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
                 {/* Search input */}
                 <div className="col-span-12 md:col-span-4 relative">
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
@@ -736,7 +764,7 @@ export default function App() {
                     />
                     <div>
                       <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                        ⚠️ Clientes Reincidentes
+                        <AlertCircle className="w-4 h-4 text-amber-500 shrink-0" /> Clientes Reincidentes
                       </span>
                       <p className="text-[11px] text-slate-500 leading-tight">
                         Focar exclusivamente em clientes com múltiplos atendimentos históricos.
@@ -754,7 +782,7 @@ export default function App() {
                     />
                     <div>
                       <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                        🚫 Erro de Entrada de Dados
+                        <AlertCircle className="w-4 h-4 text-red-500 shrink-0" /> Erro de Entrada de Dados
                       </span>
                       <p className="text-[11px] text-slate-500 leading-tight">
                         Exibir chamados com telefones inválidos, vazios ou descrição com erro de contato.
@@ -772,7 +800,7 @@ export default function App() {
                     />
                     <div>
                       <span className="text-sm font-bold text-slate-800 flex items-center gap-1.5">
-                        🔀 Erro de Direcionamento
+                        <Shuffle className="w-4 h-4 text-indigo-500 shrink-0" /> Erro de Direcionamento
                       </span>
                       <p className="text-[11px] text-slate-500 leading-tight">
                         Exibir chamados enviados para equipes inadequadas ou incompatíveis.
@@ -782,6 +810,7 @@ export default function App() {
 
                 </div>
               </div>
+            )}
 
               {/* Render Active Filters Summary Bar */}
               {hasActiveFilters && (
@@ -920,7 +949,7 @@ export default function App() {
                   </p>
                 </div>
                 <div className="p-3.5 bg-amber-50 text-amber-500 rounded-xl group-hover:bg-amber-100 transition-colors duration-300">
-                  <span className="text-lg font-bold">⚠️</span>
+                  <RotateCcw className="w-5 h-5" />
                 </div>
               </div>
 
@@ -930,7 +959,7 @@ export default function App() {
             <section id="quality-audit-section" className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
               <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
                 <div className="flex items-center space-x-2">
-                  <span className="text-base">🛡️</span>
+                  <ShieldAlert className="w-5 h-5 text-indigo-600 shrink-0" />
                   <h2 className="text-sm font-extrabold text-obsidian-black uppercase tracking-wider">
                     Auditoria de Qualidade e Erros de Atendimento
                   </h2>
@@ -964,7 +993,7 @@ export default function App() {
                         </span>
                       </div>
                     </div>
-                    <span className="text-2xl">🚫</span>
+                    <AlertCircle className="w-7 h-7 text-red-500/80 group-hover:scale-110 transition-transform shrink-0" />
                   </div>
                   
                   {/* Progress Indicator */}
@@ -976,7 +1005,7 @@ export default function App() {
                   </div>
 
                   <p className="text-[11px] text-slate-500 mt-2 font-medium leading-relaxed">
-                    Clientes sem telefone válido ou sinalização de contato inválido na solicitação. {showOnlyInputError ? '👉 Clique para desativar filtro.' : '👉 Clique para filtrar chamados com este erro.'}
+                    Clientes sem telefone válido ou sinalização de contato inválido na solicitação. <span className="font-semibold text-slate-600 underline decoration-slate-300 decoration-dotted">{showOnlyInputError ? 'Clique para desativar filtro.' : 'Clique para filtrar chamados com este erro.'}</span>
                   </p>
                 </div>
 
@@ -1003,7 +1032,7 @@ export default function App() {
                         </span>
                       </div>
                     </div>
-                    <span className="text-2xl">🔀</span>
+                    <Shuffle className="w-7 h-7 text-indigo-500/80 group-hover:scale-110 transition-transform shrink-0" />
                   </div>
                   
                   {/* Progress Indicator */}
@@ -1015,7 +1044,7 @@ export default function App() {
                   </div>
 
                   <p className="text-[11px] text-slate-500 mt-2 font-medium leading-relaxed">
-                    Chamados direcionados para equipes inadequadas baseando-se no texto descritivo. {showOnlyRoutingError ? '👉 Clique para desativar filtro.' : '👉 Clique para filtrar chamados com este erro.'}
+                    Chamados direcionados para equipes inadequadas baseando-se no texto descritivo. <span className="font-semibold text-slate-600 underline decoration-slate-300 decoration-dotted">{showOnlyRoutingError ? 'Clique para desativar filtro.' : 'Clique para filtrar chamados com este erro.'}</span>
                   </p>
                 </div>
               </div>
@@ -1166,17 +1195,17 @@ export default function App() {
                             <span className="font-semibold truncate max-w-[150px]">{ticket.clientName}</span>
                             {recurringClients.has(ticket.clientName?.trim().toUpperCase()) && (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0 ml-1 whitespace-nowrap" title="Cliente recorrente com múltiplos atendimentos">
-                                ⚠️ Reincidente
+                                <AlertCircle className="w-2.5 h-2.5 text-amber-500 mr-1 shrink-0" /> Reincidente
                               </span>
                             )}
                             {ticket.hasInputError && (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-700 border border-red-200 shrink-0 ml-1 whitespace-nowrap" title="Esta solicitação possui erros na inserção de dados">
-                                🚫 Entrada
+                                <AlertCircle className="w-2.5 h-2.5 text-red-500 mr-1 shrink-0" /> Entrada
                               </span>
                             )}
                             {ticket.hasRoutingError && (
                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0 ml-1 whitespace-nowrap" title="Esta solicitação possui erros de direcionamento">
-                                🔀 Direcionamento
+                                <Shuffle className="w-2.5 h-2.5 text-indigo-500 mr-1 shrink-0" /> Direcionamento
                               </span>
                             )}
                             {ticket.phone && (
@@ -1268,17 +1297,17 @@ export default function App() {
                                     <span className="font-semibold text-slate-800">{ticket.clientName}</span>
                                     {recurringClients.has(ticket.clientName?.trim().toUpperCase()) && (
                                       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-amber-50 text-amber-700 border border-amber-200 shrink-0 whitespace-nowrap" title="Este cliente possui múltiplos chamados na base">
-                                        ⚠️ Reincidente
+                                        <AlertCircle className="w-2.5 h-2.5 text-amber-500 mr-1 shrink-0" /> Reincidente
                                       </span>
                                     )}
                                     {ticket.hasInputError && (
                                       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-red-50 text-red-700 border border-red-200 shrink-0 whitespace-nowrap" title="Esta solicitação possui erros na inserção de dados">
-                                        🚫 Entrada
+                                        <AlertCircle className="w-2.5 h-2.5 text-red-500 mr-1 shrink-0" /> Entrada
                                       </span>
                                     )}
                                     {ticket.hasRoutingError && (
                                       <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-bold bg-indigo-50 text-indigo-700 border border-indigo-200 shrink-0 whitespace-nowrap" title="Esta solicitação possui erros de direcionamento">
-                                        🔀 Direcionamento
+                                        <Shuffle className="w-2.5 h-2.5 text-indigo-500 mr-1 shrink-0" /> Direcionamento
                                       </span>
                                     )}
                                   </div>
