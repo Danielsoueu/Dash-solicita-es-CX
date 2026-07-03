@@ -52,6 +52,7 @@ export default function App() {
   const [selectedWord, setSelectedWord] = useState<string | null>(null);
   const [selectedAgent, setSelectedAgent] = useState<string | null>(null);
   const [selectedMonth, setSelectedMonth] = useState<string | null>(null);
+  const [selectedDay, setSelectedDay] = useState<string | null>(null);
   const [selectedPriority, setSelectedPriority] = useState<string | null>(null);
   const [showOnlyRecurring, setShowOnlyRecurring] = useState(false);
   const [showOnlyInputError, setShowOnlyInputError] = useState(false);
@@ -135,7 +136,7 @@ export default function App() {
   // Reset pagination to first page when filters change
   useEffect(() => {
     setCurrentPage(1);
-  }, [searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth, selectedPriority, showOnlyRecurring, showOnlyInputError, showOnlyRoutingError]);
+  }, [searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth, selectedDay, selectedPriority, showOnlyRecurring, showOnlyInputError, showOnlyRoutingError]);
 
   // Pure function to apply heuristic automatic error detection merged with manual modifications
   const applyModificationsAndHeuristics = (rawTickets: Ticket[], mods: Record<string, any>): Ticket[] => {
@@ -377,8 +378,16 @@ export default function App() {
         return false;
       }
 
+      // 4.5. Specific Day Filter
+      if (selectedDay) {
+        const ticketDayStr = new Date(ticket.createdAt).toLocaleDateString('en-CA', { timeZone: 'America/Sao_Paulo' });
+        if (ticketDayStr !== selectedDay) {
+          return false;
+        }
+      }
+
       // 5. Period Range Filter
-      if (!selectedMonth) {
+      if (!selectedMonth && !selectedDay) {
         const ticketDate = new Date(ticket.createdAt);
         const referenceDate = new Date();
         
@@ -432,7 +441,7 @@ export default function App() {
 
       return true;
     });
-  }, [enhancedTickets, searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth, selectedPriority, showOnlyRecurring, showOnlyInputError, showOnlyRoutingError, recurringClients]);
+  }, [enhancedTickets, searchTerm, selectedTeam, selectedPeriod, selectedWord, selectedAgent, selectedMonth, selectedDay, selectedPriority, showOnlyRecurring, showOnlyInputError, showOnlyRoutingError, recurringClients]);
 
   // Derived Performance Metrics (including Recurrence Rate)
   const metrics = useMemo(() => {
@@ -486,13 +495,14 @@ export default function App() {
     setSelectedWord(null);
     setSelectedAgent(null);
     setSelectedMonth(null);
+    setSelectedDay(null);
     setSelectedPriority(null);
     setShowOnlyRecurring(false);
     setShowOnlyInputError(false);
     setShowOnlyRoutingError(false);
   };
 
-  const hasActiveFilters = searchTerm !== '' || selectedTeam !== null || selectedPeriod !== 'all' || selectedWord !== null || selectedAgent !== null || selectedMonth !== null || selectedPriority !== null || showOnlyRecurring || showOnlyInputError || showOnlyRoutingError;
+  const hasActiveFilters = searchTerm !== '' || selectedTeam !== null || selectedPeriod !== 'all' || selectedWord !== null || selectedAgent !== null || selectedMonth !== null || selectedDay !== null || selectedPriority !== null || showOnlyRecurring || showOnlyInputError || showOnlyRoutingError;
 
   return (
     <div className="min-h-screen bg-slate-50 text-obsidian-black font-sans antialiased flex flex-col selection:bg-electric-rose/10 selection:text-electric-rose">
@@ -629,7 +639,7 @@ export default function App() {
               {showFilters && (
                 <div className="grid grid-cols-1 md:grid-cols-12 gap-5">
                 {/* Search input */}
-                <div className="col-span-12 md:col-span-4 relative">
+                <div className="col-span-12 md:col-span-3 relative">
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
                     Buscar por Conteúdo
                   </label>
@@ -639,16 +649,16 @@ export default function App() {
                       type="text"
                       value={searchTerm}
                       onChange={(e) => setSearchTerm(e.target.value)}
-                      placeholder="Cliente, telefone, termo ou chamado..."
+                      placeholder="Cliente, telefone..."
                       className="w-full text-sm pl-10 pr-4 py-2.5 bg-slate-50/50 hover:bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-electric-rose/20 focus:border-electric-rose font-sans text-slate-800 transition-all"
                     />
                   </div>
                 </div>
 
                 {/* Team Dropdown Filter */}
-                <div className="col-span-12 sm:col-span-6 md:col-span-4">
+                <div className="col-span-12 sm:col-span-6 md:col-span-3">
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                    Filtrar por Equipe Responsável
+                    Filtrar por Equipe
                   </label>
                   <select
                     value={selectedTeam || ''}
@@ -663,7 +673,7 @@ export default function App() {
                 </div>
 
                 {/* Agent/Assessor Dropdown Filter */}
-                <div className="col-span-12 sm:col-span-6 md:col-span-4">
+                <div className="col-span-12 sm:col-span-6 md:col-span-3">
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
                     Solicitação enviada por:
                   </label>
@@ -679,6 +689,25 @@ export default function App() {
                   </select>
                 </div>
 
+                {/* Priority Dropdown Filter */}
+                <div className="col-span-12 sm:col-span-6 md:col-span-3">
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
+                    Filtrar por Prioridade
+                  </label>
+                  <select
+                    value={selectedPriority || ''}
+                    onChange={(e) => setSelectedPriority(e.target.value || null)}
+                    className="w-full text-sm py-2.5 px-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-electric-rose/20 focus:border-electric-rose font-sans text-slate-800 transition-all cursor-pointer"
+                  >
+                    <option value="">Todas as Prioridades</option>
+                    <option value="Crítica">🚨 Crítica</option>
+                    <option value="Alta">⚠️ Alta</option>
+                    <option value="Média">🟡 Média</option>
+                    <option value="Baixa">🟢 Baixa</option>
+                    <option value="Dúvida">🔵 Dúvida</option>
+                  </select>
+                </div>
+
                 {/* Period Range Tabs Filter */}
                 <div className="col-span-12 md:col-span-4">
                   <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
@@ -691,10 +720,11 @@ export default function App() {
                         onClick={() => {
                           setSelectedPeriod(period);
                           setSelectedMonth(null); // Clear specific month if temporal tabs are clicked
+                          setSelectedDay(null); // Clear specific day
                         }}
                         className={`
                           py-2 text-[11px] font-bold rounded-lg transition-all cursor-pointer text-center capitalize
-                          ${selectedPeriod === period && !selectedMonth
+                          ${selectedPeriod === period && !selectedMonth && !selectedDay
                             ? 'bg-white text-obsidian-black shadow-xs font-extrabold' 
                             : 'text-slate-500 hover:text-obsidian-black'
                           }
@@ -721,6 +751,7 @@ export default function App() {
                       setSelectedMonth(val);
                       if (val) {
                         setSelectedPeriod('all'); // Clear fast period tabs if monthly filter is engaged
+                        setSelectedDay(null); // Clear specific day
                       }
                     }}
                     className="w-full text-sm py-2.5 px-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-electric-rose/20 focus:border-electric-rose font-sans text-slate-800 transition-all cursor-pointer"
@@ -732,23 +763,35 @@ export default function App() {
                   </select>
                 </div>
 
-                {/* Priority Dropdown Filter */}
-                <div className="col-span-12 sm:col-span-6 md:col-span-4">
-                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider">
-                    Filtrar por Prioridade
+                {/* Specific Day Picker Filter */}
+                <div className="col-span-12 md:col-span-4 relative">
+                  <label className="block text-xs font-bold text-slate-500 mb-1 uppercase tracking-wider flex items-center gap-1.5">
+                    <Calendar className="w-3.5 h-3.5 text-slate-400" /> Filtrar por Dia Específico
                   </label>
-                  <select
-                    value={selectedPriority || ''}
-                    onChange={(e) => setSelectedPriority(e.target.value || null)}
-                    className="w-full text-sm py-2.5 px-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-electric-rose/20 focus:border-electric-rose font-sans text-slate-800 transition-all cursor-pointer"
-                  >
-                    <option value="">Todas as Prioridades</option>
-                    <option value="Crítica">🚨 Crítica</option>
-                    <option value="Alta">⚠️ Alta</option>
-                    <option value="Média">🟡 Média</option>
-                    <option value="Baixa">🟢 Baixa</option>
-                    <option value="Dúvida">🔵 Dúvida</option>
-                  </select>
+                  <div className="relative">
+                    <input
+                      type="date"
+                      value={selectedDay || ''}
+                      onChange={(e) => {
+                        const val = e.target.value || null;
+                        setSelectedDay(val);
+                        if (val) {
+                          setSelectedMonth(null); // Clear specific month if day is picked
+                          setSelectedPeriod('all'); // Clear fast period tab
+                        }
+                      }}
+                      className="w-full text-sm py-2.5 px-3 bg-slate-50/50 hover:bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-2 focus:ring-electric-rose/20 focus:border-electric-rose font-sans text-slate-800 transition-all cursor-pointer"
+                    />
+                    {selectedDay && (
+                      <button
+                        onClick={() => setSelectedDay(null)}
+                        className="absolute right-3 top-1/2 -translate-y-1/2 text-slate-400 hover:text-electric-rose font-bold text-sm bg-slate-100 rounded-full w-5 h-5 flex items-center justify-center cursor-pointer"
+                        title="Limpar dia"
+                      >
+                        ×
+                      </button>
+                    )}
+                  </div>
                 </div>
 
                 {/* Checkboxes de Qualidade e Recorrência */}
@@ -840,7 +883,14 @@ export default function App() {
                     </span>
                   )}
 
-                  {selectedPeriod !== 'all' && !selectedMonth && (
+                  {selectedDay && (
+                    <span className="inline-flex items-center px-3 py-1 bg-slate-900 text-white rounded-full text-xs font-medium space-x-1.5 border border-slate-950">
+                      <span>Dia: {new Date(selectedDay + 'T00:00:00').toLocaleDateString('pt-BR', { timeZone: 'America/Sao_Paulo' })}</span>
+                      <button onClick={() => setSelectedDay(null)} className="hover:text-electric-rose cursor-pointer font-bold">×</button>
+                    </span>
+                  )}
+
+                  {selectedPeriod !== 'all' && !selectedMonth && !selectedDay && (
                     <span className="inline-flex items-center px-3 py-1 bg-slate-900 text-white rounded-full text-xs font-medium space-x-1.5 border border-slate-950">
                       <span>
                         Período: {selectedPeriod === 'today' && 'Hoje'}

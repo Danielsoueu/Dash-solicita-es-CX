@@ -37,38 +37,96 @@ export function parsePortugueseDate(dateStr: string): string {
   
   const cleaned = dateStr.replace(/"/g, '').trim();
   
-  // Format: "6 de mar., 2026 15h23min37s" or similar
-  const regex = /(\d+)\s+de\s+(\w+)\.?,\s+(\d{4})\s+(\d+)h(\d+)min(\d+)s/;
-  const match = cleaned.match(regex);
-  if (!match) {
-    const standardDate = Date.parse(cleaned);
-    if (!isNaN(standardDate)) {
-      return new Date(standardDate).toISOString();
-    }
-    return new Date().toISOString();
-  }
-
-  const day = parseInt(match[1], 10);
-  const monthAbbr = match[2].toLowerCase();
-  const year = parseInt(match[3], 10);
-  const hour = parseInt(match[4], 10);
-  const minute = parseInt(match[5], 10);
-  const second = parseInt(match[6], 10);
-
   const months: Record<string, number> = {
     'jan': 0, 'fev': 1, 'mar': 2, 'abr': 3, 'mai': 4, 'jun': 5,
     'jul': 6, 'ago': 7, 'set': 8, 'out': 9, 'nov': 10, 'dez': 11
   };
 
-  let monthIndex = 5; // default June
-  for (const [key, val] of Object.entries(months)) {
-    if (monthAbbr.startsWith(key)) {
-      monthIndex = val;
-      break;
+  // Format A: '6 de mar., 2026 15h23min37s' or '1º de abr., 2026 14h14min13s'
+  const dateMatchA = cleaned.match(/^(\d+)(?:º|ª)?\s+de\s+([^\s\.,]+)\.?,\s+(\d{4})/i);
+  if (dateMatchA) {
+    const day = parseInt(dateMatchA[1], 10);
+    const monthAbbr = dateMatchA[2].toLowerCase();
+    const year = parseInt(dateMatchA[3], 10);
+    
+    let monthIndex = 5; // default June
+    for (const [key, val] of Object.entries(months)) {
+      if (monthAbbr.startsWith(key)) {
+        monthIndex = val;
+        break;
+      }
     }
+
+    // Parse time after the date part
+    const timePart = cleaned.substring(dateMatchA[0].length).trim();
+    let hour = 0;
+    let minute = 0;
+    let second = 0;
+
+    const hMatch = timePart.match(/(\d+)\s*h/i);
+    if (hMatch) {
+      hour = parseInt(hMatch[1], 10);
+    }
+
+    const minMatch = timePart.match(/(\d+)\s*min/i);
+    if (minMatch) {
+      minute = parseInt(minMatch[1], 10);
+    } else {
+      // Check for formats like '19h57' or '12h36' where minutes follow 'h' and don't end with 's'
+      const altMinMatch = timePart.match(/h\s*(\d+)(?!\s*s)/i);
+      if (altMinMatch) {
+        minute = parseInt(altMinMatch[1], 10);
+      }
+    }
+
+    const sMatch = timePart.match(/(\d+)\s*s/i);
+    if (sMatch) {
+      second = parseInt(sMatch[1], 10);
+    }
+
+    return new Date(year, monthIndex, day, hour, minute, second).toISOString();
   }
 
-  return new Date(year, monthIndex, day, hour, minute, second).toISOString();
+  // Format B: 'jun. 18, 2026, 13:04:31'
+  const regexB = /([^\s\.,]+)\.?\s+(\d+),\s+(\d{4}),\s+(\d+):(\d+):(\d+)/;
+  const matchB = cleaned.match(regexB);
+  if (matchB) {
+    const monthAbbr = matchB[1].toLowerCase();
+    const day = parseInt(matchB[2], 10);
+    const year = parseInt(matchB[3], 10);
+    const hour = parseInt(matchB[4], 10);
+    const minute = parseInt(matchB[5], 10);
+    const second = parseInt(matchB[6], 10);
+    
+    let monthIndex = 5; // default June
+    for (const [key, val] of Object.entries(months)) {
+      if (monthAbbr.startsWith(key)) {
+        monthIndex = val;
+        break;
+      }
+    }
+    return new Date(year, monthIndex, day, hour, minute, second).toISOString();
+  }
+
+  // Format C: 'DD/MM/YYYY HH:mm:ss'
+  const regexC = /(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d+):(\d+):(\d+))?/;
+  const matchC = cleaned.match(regexC);
+  if (matchC) {
+    const day = parseInt(matchC[1], 10);
+    const month = parseInt(matchC[2], 10) - 1;
+    const year = parseInt(matchC[3], 10);
+    const hour = matchC[4] ? parseInt(matchC[4], 10) : 0;
+    const minute = matchC[5] ? parseInt(matchC[5], 10) : 0;
+    const second = matchC[6] ? parseInt(matchC[6], 10) : 0;
+    return new Date(year, month, day, hour, minute, second).toISOString();
+  }
+
+  const standardDate = Date.parse(cleaned);
+  if (!isNaN(standardDate)) {
+    return new Date(standardDate).toISOString();
+  }
+  
+  return new Date().toISOString();
 }
 
 export function extractKeywords(text: string): string[] {
