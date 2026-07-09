@@ -21,7 +21,8 @@ export const INITIAL_TICKETS: Ticket[] = [
     chatLog: [
       { sender: "cliente", text: "Cliente deseja regularizar assinatura em aberto desde nov/2025.", timestamp: "2026-06-24T08:30:00Z" }
     ],
-    keyWords: ["Regularizar", "Assinatura", "Cobrança"]
+    keyWords: ["Regularizar", "Assinatura", "Cobrança"],
+    category: "Inadimplência"
   },
   {
     id: "HERO-1002",
@@ -37,7 +38,8 @@ export const INITIAL_TICKETS: Ticket[] = [
     chatLog: [
       { sender: "cliente", text: "Cliente deseja regularizar assinatura em aberto desde nov/2025.", timestamp: "2026-06-24T07:15:00Z" }
     ],
-    keyWords: ["Regularizar", "Assinatura", "Cobrança"]
+    keyWords: ["Regularizar", "Assinatura", "Cobrança"],
+    category: "Inadimplência"
   },
   {
     id: "HERO-1003",
@@ -53,6 +55,7 @@ export const INITIAL_TICKETS: Ticket[] = [
     chatLog: [
       { sender: "cliente", text: "Cliente alega que está desde segunda-feira aguardando contato, deseja desconto na renovação.", timestamp: "2026-06-24T06:00:00Z" }
     ],
-    keyWords: ["Desconto", "Renovação", "Aguardando"]
+    keyWords: ["Desconto", "Renovação", "Aguardando"],
+    category: "Pedido de desconto"
   }
 ];

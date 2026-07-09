@@ -219,6 +219,7 @@ export function parseGoogleSheetsCSV(csvText: string): Ticket[] {
     
     const createdAt = parsePortugueseDate(rawDate);
     const keyWords = extractKeywords(description);
+    const category = classifyTicket(description, team);
 
     // Initial mock chat logs based on description
     const chatLog: ChatMessage[] = [];
@@ -253,10 +254,213 @@ export function parseGoogleSheetsCSV(csvText: string): Ticket[] {
       createdAt,
       chatLog,
       keyWords,
+      category,
       columnKValue
     });
   }
 
   // Sort descending by date
   return tickets.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function classifyTicket(description: string, team?: string): string {
+  const desc = (description || '').toLowerCase();
+  
+  // Normalization (remove common Portuguese accents for better matching)
+  const norm = desc
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+  const teamLower = (team || '').toLowerCase();
+
+  // 1. Cancelamento
+  if (
+    norm.includes("cancelar") || 
+    norm.includes("cancelamento") || 
+    norm.includes("encerrar") || 
+    norm.includes("rescisao") || 
+    norm.includes("desativar") ||
+    norm.includes("quitar e cancelar") ||
+    norm.includes("fim do contrato") ||
+    norm.includes("fim da assinatura")
+  ) {
+    return "Cancelamento";
+  }
+
+  // 2. Pedido de desconto
+  if (
+    norm.includes("desconto") || 
+    norm.includes("reduzir") || 
+    norm.includes("reducao") || 
+    norm.includes("baixar o valor") || 
+    norm.includes("valor mais baixo") || 
+    norm.includes("diminuir") || 
+    norm.includes("negociar") || 
+    norm.includes("descontinho") || 
+    norm.includes("negociacao") || 
+    norm.includes("ajuste de valor")
+  ) {
+    return "Pedido de desconto";
+  }
+
+  // 3. Segunda via de boleto
+  if (
+    norm.includes("segunda via") || 
+    norm.includes("2 via") || 
+    norm.includes("2a via") || 
+    norm.includes("2ª via") || 
+    norm.includes("copia do boleto") || 
+    norm.includes("reemitir") || 
+    norm.includes("reemissao") || 
+    norm.includes("outro boleto") || 
+    norm.includes("boleto atualizado") || 
+    norm.includes("enviar o boleto") ||
+    (norm.includes("boleto") && norm.includes("enviar"))
+  ) {
+    return "Segunda via de boleto";
+  }
+
+  // 4. Não recebeu boleto
+  if (
+    norm.includes("nao recebeu") || 
+    norm.includes("sem boleto") || 
+    norm.includes("cade o boleto") || 
+    norm.includes("nao chegou") || 
+    norm.includes("recebeu o boleto") || 
+    norm.includes("falta de boleto")
+  ) {
+    return "Não recebeu boleto";
+  }
+
+  // 5. Alteração de endereço fiscal
+  if (
+    norm.includes("endereco fiscal") || 
+    (norm.includes("endereco") && (norm.includes("fiscal") || norm.includes("comprovante"))) ||
+    norm.includes("mudanca de endereco") ||
+    norm.includes("mudar endereco") ||
+    norm.includes("alterar endereco")
+  ) {
+    return "Alteração de endereço fiscal";
+  }
+
+  // 6. Alteração societária
+  if (
+    norm.includes("societaria") || 
+    norm.includes("societario") || 
+    norm.includes("socio") || 
+    norm.includes("quadro") || 
+    norm.includes("mudar socio") || 
+    norm.includes("alterar socio") || 
+    norm.includes("retirar socio") || 
+    norm.includes("incluir socio") || 
+    norm.includes("contrato social")
+  ) {
+    return "Alteração societária";
+  }
+
+  // 7. Alteração cadastral
+  if (
+    norm.includes("cadastral") || 
+    norm.includes("cadastro") || 
+    norm.includes("razao social") || 
+    norm.includes("mudar dados") || 
+    norm.includes("alterar dados") || 
+    norm.includes("atualizar dados") || 
+    norm.includes("mudar telefone") || 
+    norm.includes("mudar e-mail") || 
+    norm.includes("alterar email") || 
+    norm.includes("alterar cnpj") ||
+    norm.includes("atualizar cnpj")
+  ) {
+    return "Alteração cadastral";
+  }
+
+  // 8. Parcelamento
+  if (
+    norm.includes("parcelamento") || 
+    norm.includes("parcelar") || 
+    norm.includes("dividir em") || 
+    norm.includes("quantas vezes") || 
+    norm.includes("parcelas") || 
+    norm.includes("pagar parcelado")
+  ) {
+    return "Parcelamento";
+  }
+
+  // 9. Dúvidas sobre renovação
+  if (
+    norm.includes("renovacao") || 
+    norm.includes("renovar") || 
+    norm.includes("como renovar") || 
+    norm.includes("vencimento") || 
+    norm.includes("vencer") || 
+    norm.includes("renovacao do plano")
+  ) {
+    return "Dúvidas sobre renovação";
+  }
+
+  // 10. Problema com pagamento
+  if (
+    norm.includes("erro no pagamento") || 
+    norm.includes("nao consigo pagar") || 
+    norm.includes("recusado") || 
+    norm.includes("falha no pagamento") || 
+    norm.includes("erro de cobranca") || 
+    norm.includes("cartao recusado") || 
+    norm.includes("pix nao funciona") || 
+    norm.includes("duplicidade") || 
+    norm.includes("cobrado duas vezes") || 
+    norm.includes("comprovante") ||
+    norm.includes("pago") ||
+    norm.includes("pagamento")
+  ) {
+    return "Problema com pagamento";
+  }
+
+  // 11. Reclamação
+  if (
+    norm.includes("reclamacao") || 
+    norm.includes("reclamar") || 
+    norm.includes("insatisfeito") || 
+    norm.includes("absurdo") || 
+    norm.includes("demora") || 
+    norm.includes("ruim") || 
+    norm.includes("pessimo") || 
+    norm.includes("atendimento ruim")
+  ) {
+    return "Reclamação";
+  }
+
+  // 12. Inadimplência
+  if (
+    norm.includes("inadimplencia") || 
+    norm.includes("em atraso") || 
+    norm.includes("atrasado") || 
+    norm.includes("regularizar") || 
+    norm.includes("pendencia") || 
+    norm.includes("debito") || 
+    norm.includes("bloqueado") || 
+    norm.includes("suspenso") ||
+    teamLower.includes("cobranca")
+  ) {
+    return "Inadimplência";
+  }
+
+  // 13. Problemas no aplicativo
+  if (
+    norm.includes("aplicativo") || 
+    norm.includes("app") || 
+    norm.includes("plataforma") || 
+    norm.includes("bug") || 
+    norm.includes("sistema fora") || 
+    norm.includes("erro no app") || 
+    norm.includes("nao carrega") || 
+    norm.includes("senha") || 
+    norm.includes("login") || 
+    norm.includes("acesso")
+  ) {
+    return "Problemas no aplicativo";
+  }
+
+  return "Outros";
 }

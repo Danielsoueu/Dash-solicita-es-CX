@@ -181,7 +181,7 @@ export default function TicketDetailModal({
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                 {/* Status Input Error */}
                 <div
-                  className={`flex items-center justify-between p-3.5 rounded-xl border text-left ${
+                  className={`flex flex-col justify-center p-3.5 rounded-xl border text-left ${
                     ticket.hasInputError 
                       ? 'bg-red-50/80 border-red-200 text-red-900 shadow-sm shadow-red-100/50' 
                       : 'bg-emerald-50/60 border-emerald-100 text-emerald-900'
@@ -205,11 +205,17 @@ export default function TicketDetailModal({
                       </div>
                     </div>
                   </div>
+                  {ticket.hasInputError && ticket.inputErrorDetails && ticket.inputErrorDetails.length > 0 && (
+                    <div className="mt-2.5 pt-2 border-t border-red-100 text-[10px] text-red-700 font-mono break-words">
+                      <strong className="text-red-900 font-bold font-sans uppercase text-[8px] tracking-wider block mb-0.5">Campos Incorretos:</strong>
+                      {ticket.inputErrorDetails.join(', ')}
+                    </div>
+                  )}
                 </div>
 
                 {/* Status Routing Error */}
                 <div
-                  className={`flex items-center justify-between p-3.5 rounded-xl border text-left ${
+                  className={`flex flex-col justify-center p-3.5 rounded-xl border text-left ${
                     ticket.hasRoutingError 
                       ? 'bg-indigo-50/80 border-indigo-200 text-indigo-900 shadow-sm shadow-indigo-100/50' 
                       : 'bg-emerald-50/60 border-emerald-100 text-emerald-900'
@@ -233,6 +239,12 @@ export default function TicketDetailModal({
                       </div>
                     </div>
                   </div>
+                  {ticket.hasRoutingError && ticket.columnKValue && (
+                    <div className="mt-2.5 pt-2 border-t border-indigo-100 text-[10px] text-indigo-700 font-mono break-words">
+                      <strong className="text-indigo-900 font-bold font-sans uppercase text-[8px] tracking-wider block mb-0.5">Tipo do Erro (Planilha):</strong>
+                      {ticket.columnKValue}
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
