@@ -661,14 +661,20 @@ export default function App() {
       }
     });
 
-    // Format for rendering
+    // Format for rendering and sort from most recent (current month) to previous/older months
     return Object.entries(monthlyGroups)
       .map(([month, cats]) => ({
         month,
         cats: Object.entries(cats).map(([name, count]) => ({ name, count }))
       }))
-      .reverse(); // old to new
-  }, [enhancedTickets, categoriesBreakdown]);
+      .sort((a, b) => {
+        const indexA = uniqueMonths.indexOf(a.month);
+        const indexB = uniqueMonths.indexOf(b.month);
+        const valA = indexA === -1 ? 999 : indexA;
+        const valB = indexB === -1 ? 999 : indexB;
+        return valA - valB;
+      });
+  }, [enhancedTickets, categoriesBreakdown, uniqueMonths]);
 
   // SPECIFIC ERROR DIAGNOSTICS (Qualidade de Dados)
   const dataQualityDiagnostics = useMemo(() => {
@@ -1910,108 +1916,7 @@ export default function App() {
                     </div>
                   </section>
 
-                  {/* AREA 4: QUALIDADE DE ATENDIMENTO & PLANOS DE AÇÃO */}
-                  <section className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs">
-                    <div className="flex items-center justify-between mb-4 pb-2 border-b border-slate-100">
-                      <div className="flex items-center space-x-2">
-                        <ShieldAlert className="w-4 h-4 text-electric-rose shrink-0" />
-                        <h2 className="text-xs font-bold text-obsidian-black uppercase tracking-wider">
-                          Onde devemos agir para reduzir o volume de chamados? (Qualidade de Atendimento)
-                        </h2>
-                      </div>
-                      <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">Planos de Redução</span>
-                    </div>
 
-                    <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
-                      {/* Sub-card: Cadastro Incorreto */}
-                      <div className="bg-slate-50/50 border border-slate-200/80 rounded-2xl p-4 space-y-3.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-red-700 flex items-center gap-1"><AlertTriangle className="w-4 h-4 text-red-500" /> Falhas de Inserção de Dados (Erros de Cadastro)</span>
-                          <span className="text-xs font-mono font-bold text-slate-700 bg-red-100 px-2 py-0.5 rounded">{metrics.inputErrorCount} chamados</span>
-                        </div>
-                        <p className="text-[11px] text-slate-500">Mapeamento de incoerências de telefone, celular inválido ou e-mail com problemas detectados no input de cadastro.</p>
-                        
-                        <div className="space-y-2">
-                          {dataQualityDiagnostics.length === 0 ? (
-                            <p className="text-xs text-slate-400 font-medium py-2">Sem erros cadastrais identificados no escopo de filtros atual.</p>
-                          ) : (
-                            dataQualityDiagnostics.map((err) => (
-                              <div key={err.name} className="bg-white p-2.5 rounded-lg border border-slate-200/60 space-y-1">
-                                <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                                  <span className="truncate">{err.name}</span>
-                                  <span className="text-red-500 shrink-0 font-mono">{err.count}</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal"><strong className="text-slate-600 font-bold uppercase text-[9px]">Ação Corretiva:</strong> {err.recovery}</p>
-                              </div>
-                            ))
-                          )}
-                        </div>
-
-                        {/* Breakdown of actual input error fields */}
-                        {inputErrorsBreakdown.length > 0 && (
-                          <div className="pt-3.5 border-t border-slate-200/60 space-y-2">
-                            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Campos Preenchidos Incorretamente (Heurística/IA)</span>
-                            <div className="grid grid-cols-1 gap-1.5 max-h-[160px] overflow-y-auto pr-1">
-                              {inputErrorsBreakdown.map((err) => {
-                                let labelColor = 'text-rose-600 bg-rose-50';
-                                if (err.name === 'Telefone') labelColor = 'text-rose-600 bg-rose-50';
-                                else if (err.name === 'Nome') labelColor = 'text-amber-600 bg-amber-50';
-                                else if (err.name === 'Link Iugu') labelColor = 'text-sky-600 bg-sky-50';
-                                else labelColor = 'text-indigo-600 bg-indigo-50';
-
-                                return (
-                                  <div key={err.name} className="bg-white p-2 rounded-lg border border-slate-200/60 flex items-center justify-between text-[11px]">
-                                    <span className="font-semibold text-slate-700 truncate mr-2" title={err.name}>{err.name}</span>
-                                    <span className={`text-xs font-bold font-mono px-1.5 py-0.5 rounded shrink-0 ${labelColor}`}>{err.count}</span>
-                                  </div>
-                                );
-                              })}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-
-                      {/* Sub-card: Roteamento Incorreto */}
-                      <div className="bg-slate-50/50 border border-slate-200/80 rounded-2xl p-4 space-y-3.5">
-                        <div className="flex items-center justify-between">
-                          <span className="text-xs font-bold text-indigo-700 flex items-center gap-1"><Shuffle className="w-3.5 h-3.5 text-indigo-500" /> Erros de Direcionamento</span>
-                          <span className="text-xs font-mono font-bold text-slate-700 bg-indigo-100 px-2 py-0.5 rounded">{metrics.routingErrorCount} chamados</span>
-                        </div>
-                        <p className="text-[11px] text-slate-500">Mapeamento de fluxos onde palavras-chave do problema do cliente entram em conflito direto com as atribuições da equipe associada ou apresentam erros de abertura de solicitação na planilha.</p>
-
-                        <div className="space-y-2">
-                          {routingQualityDiagnostics.length === 0 ? (
-                            <p className="text-xs text-slate-400 font-medium py-2">Sem falhas de roteamento identificadas no escopo de filtros atual.</p>
-                          ) : (
-                            routingQualityDiagnostics.map((err) => (
-                              <div key={err.name} className="bg-white p-2.5 rounded-lg border border-slate-200/60 space-y-1">
-                                <div className="flex items-center justify-between text-xs font-bold text-slate-800">
-                                  <span className="truncate">{err.name}</span>
-                                  <span className="text-indigo-500 shrink-0 font-mono">{err.count}</span>
-                                </div>
-                                <p className="text-[10px] text-slate-400 leading-normal"><strong className="text-slate-600 font-bold uppercase text-[9px]">Ação Corretiva:</strong> {err.recovery}</p>
-                              </div>
-                            ))
-                          )}
-                        </div>
-
-                        {/* Breakdown of actual errors from spreadsheet Column K */}
-                        {columnKErrorsBreakdown.length > 0 && (
-                          <div className="pt-3.5 border-t border-slate-200/60 space-y-2">
-                            <span className="text-[10px] font-extrabold text-slate-400 uppercase tracking-wider block">Tipos de Erros Registrados (Coluna K da Planilha)</span>
-                            <div className="grid grid-cols-1 gap-1.5 max-h-[160px] overflow-y-auto pr-1">
-                              {columnKErrorsBreakdown.map((err) => (
-                                <div key={err.name} className="bg-white p-2 rounded-lg border border-slate-200/60 flex items-center justify-between text-[11px]">
-                                  <span className="font-semibold text-slate-700 truncate mr-2" title={err.name}>{err.name}</span>
-                                  <span className="text-xs font-bold font-mono text-indigo-600 bg-indigo-50 px-1.5 py-0.5 rounded shrink-0">{err.count}</span>
-                                </div>
-                              ))}
-                            </div>
-                          </div>
-                        )}
-                      </div>
-                    </div>
-                  </section>
                 </motion.div>
               ) : (
                 <motion.div
