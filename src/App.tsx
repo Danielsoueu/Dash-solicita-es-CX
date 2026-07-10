@@ -1624,7 +1624,7 @@ export default function App() {
                         }}
                         className={`group rounded-2xl border p-5 flex flex-col justify-between shadow-xs text-left cursor-pointer transition-all duration-200 active:scale-98 relative overflow-hidden ${
                           showOnlyInputError 
-                            ? 'border-red-500 bg-red-50/10 ring-2 ring-red-500/15 shadow-sm animate-pulse-subtle' 
+                            ? 'border-indigo-500 bg-indigo-50/10 ring-2 ring-indigo-500/15 shadow-sm animate-pulse-subtle' 
                             : 'border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-md'
                         }`}
                         role="button"
@@ -1633,18 +1633,18 @@ export default function App() {
                         <div>
                           <div className="flex items-start justify-between w-full">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                              <AlertCircle className={`w-3.5 h-3.5 ${showOnlyInputError ? 'text-red-500' : 'text-slate-400'}`} /> Erro de Cadastro
+                              <AlertCircle className={`w-3.5 h-3.5 ${showOnlyInputError ? 'text-indigo-500' : 'text-slate-400'}`} /> Erro de Cadastro
                             </span>
                             <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-md transition-all ${
-                              showOnlyInputError ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
+                              showOnlyInputError ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
                             }`}>
                               {showOnlyInputError ? 'Filtro Ativo' : 'Filtrar'}
                             </span>
                           </div>
                           
                           <div className="mt-3 flex items-baseline justify-between">
-                            <h3 className="text-3xl font-black font-mono tracking-tight text-red-600">{metrics.inputErrorRate}%</h3>
-                            <span className="text-[10px] bg-red-50 text-red-700 px-2 py-0.5 rounded-full font-bold">
+                            <h3 className="text-3xl font-black font-mono tracking-tight text-indigo-600">{metrics.inputErrorRate}%</h3>
+                            <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
                               {metrics.inputErrorCount} chamados
                             </span>
                           </div>
@@ -1655,12 +1655,12 @@ export default function App() {
                         {metrics.inputErrorCount > 0 && inputErrorsBreakdown.length > 0 && (
                           <div className="space-y-1.5 mt-3 pt-2.5 border-t border-slate-100 w-full">
                             <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden flex">
-                              {inputErrorsBreakdown.map((item) => {
-                                let bg = 'bg-rose-500';
-                                if (item.name === 'Telefone') bg = 'bg-rose-500';
-                                else if (item.name === 'Nome') bg = 'bg-amber-400';
-                                else if (item.name === 'Link Iugu') bg = 'bg-sky-400';
-                                else bg = 'bg-indigo-400';
+                              {inputErrorsBreakdown.map((item, idx) => {
+                                let bg = 'bg-indigo-500';
+                                if (idx === 0) bg = 'bg-indigo-500';
+                                else if (idx === 1) bg = 'bg-violet-400';
+                                else if (idx === 2) bg = 'bg-fuchsia-400';
+                                else bg = 'bg-pink-400';
                                 
                                 return (
                                   <div 
@@ -1673,12 +1673,11 @@ export default function App() {
                               })}
                             </div>
                             <div className="flex flex-wrap justify-between gap-x-2 text-[8px] text-slate-400 font-bold uppercase">
-                              {inputErrorsBreakdown.slice(0, 3).map(item => {
-                                let textColor = 'text-rose-500';
-                                if (item.name === 'Telefone') textColor = 'text-rose-500';
-                                else if (item.name === 'Nome') textColor = 'text-amber-500';
-                                else if (item.name === 'Link Iugu') textColor = 'text-sky-500';
-                                else textColor = 'text-indigo-500';
+                              {inputErrorsBreakdown.slice(0, 3).map((item, idx) => {
+                                let textColor = 'text-indigo-500';
+                                if (idx === 0) textColor = 'text-indigo-500';
+                                else if (idx === 1) textColor = 'text-violet-500';
+                                else if (idx === 2) textColor = 'text-fuchsia-500';
                                 return (
                                   <span key={item.name} className={textColor}>{item.name} ({item.percentage}%)</span>
                                 );
@@ -1686,12 +1685,12 @@ export default function App() {
                             </div>
 
                             <div className="grid grid-cols-2 gap-1.5 pt-1.5">
-                              {inputErrorsBreakdown.slice(0, 4).map((err) => {
-                                let borderClass = 'border-rose-100 bg-rose-50/20 text-rose-700';
-                                if (err.name === 'Telefone') borderClass = 'border-rose-100 bg-rose-50/20 text-rose-700';
-                                else if (err.name === 'Nome') borderClass = 'border-amber-100 bg-amber-50/20 text-amber-700';
-                                else if (err.name === 'Link Iugu') borderClass = 'border-sky-100 bg-sky-50/20 text-sky-700';
-                                else borderClass = 'border-indigo-100 bg-indigo-50/20 text-indigo-700';
+                              {inputErrorsBreakdown.slice(0, 4).map((err, idx) => {
+                                let borderClass = 'border-indigo-100 bg-indigo-50/20 text-indigo-700';
+                                if (idx === 0) borderClass = 'border-indigo-100 bg-indigo-50/20 text-indigo-700';
+                                else if (idx === 1) borderClass = 'border-violet-100 bg-violet-50/20 text-violet-700';
+                                else if (idx === 2) borderClass = 'border-fuchsia-100 bg-fuchsia-50/20 text-fuchsia-700';
+                                else borderClass = 'border-pink-100 bg-pink-50/20 text-pink-700';
 
                                 return (
                                   <div key={err.name} className={`p-1 px-1.5 rounded-lg border text-[8px] font-semibold ${borderClass} flex flex-col justify-between`}>
@@ -1716,7 +1715,7 @@ export default function App() {
                         }}
                         className={`group rounded-2xl border p-5 flex flex-col justify-between shadow-xs text-left cursor-pointer transition-all duration-200 active:scale-98 relative overflow-hidden ${
                           showOnlyRoutingError 
-                            ? 'border-indigo-500 bg-indigo-50/10 ring-2 ring-indigo-500/15 shadow-sm animate-pulse-subtle' 
+                            ? 'border-red-500 bg-red-50/10 ring-2 ring-red-500/15 shadow-sm animate-pulse-subtle' 
                             : 'border-slate-200/80 bg-white hover:border-slate-300 hover:shadow-md'
                         }`}
                         role="button"
@@ -1725,18 +1724,18 @@ export default function App() {
                         <div>
                           <div className="flex items-start justify-between w-full">
                             <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider flex items-center gap-1.5">
-                              <Shuffle className={`w-3.5 h-3.5 ${showOnlyRoutingError ? 'text-indigo-500' : 'text-slate-400'}`} /> Erro de Roteamento
+                              <Shuffle className={`w-3.5 h-3.5 ${showOnlyRoutingError ? 'text-red-500' : 'text-slate-400'}`} /> Erro de Roteamento
                             </span>
                             <span className={`text-[8px] font-bold uppercase px-1.5 py-0.5 rounded-md transition-all ${
-                              showOnlyRoutingError ? 'bg-indigo-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
+                              showOnlyRoutingError ? 'bg-red-500 text-white' : 'bg-slate-100 text-slate-400 group-hover:bg-slate-200'
                             }`}>
                               {showOnlyRoutingError ? 'Filtro Ativo' : 'Filtrar'}
                             </span>
                           </div>
                           
                           <div className="mt-3 flex items-baseline justify-between">
-                            <h3 className="text-3xl font-black font-mono tracking-tight text-indigo-600">{metrics.routingErrorRate}%</h3>
-                            <span className="text-[10px] bg-indigo-50 text-indigo-700 px-2 py-0.5 rounded-full font-bold">
+                            <h3 className="text-3xl font-black font-mono tracking-tight text-red-600">{metrics.routingErrorRate}%</h3>
+                            <span className="text-[10px] bg-red-50 text-red-700 px-2 py-0.5 rounded-full font-bold">
                               {metrics.routingErrorCount} chamados
                             </span>
                           </div>
@@ -1748,11 +1747,11 @@ export default function App() {
                           <div className="space-y-1.5 mt-3 pt-2.5 border-t border-slate-100 w-full">
                             <div className="w-full bg-slate-100 rounded-full h-2 overflow-hidden flex">
                               {columnKErrorsBreakdown.map((item, idx) => {
-                                let bg = 'bg-indigo-500';
-                                if (idx === 0) bg = 'bg-indigo-500';
-                                else if (idx === 1) bg = 'bg-violet-400';
-                                else if (idx === 2) bg = 'bg-fuchsia-400';
-                                else bg = 'bg-pink-400';
+                                let bg = 'bg-rose-500';
+                                if (idx === 0) bg = 'bg-rose-500';
+                                else if (idx === 1) bg = 'bg-amber-400';
+                                else if (idx === 2) bg = 'bg-red-400';
+                                else bg = 'bg-orange-400';
                                 
                                 return (
                                   <div 
@@ -1766,10 +1765,10 @@ export default function App() {
                             </div>
                             <div className="flex flex-wrap justify-between gap-x-2 text-[8px] text-slate-400 font-bold uppercase">
                               {columnKErrorsBreakdown.slice(0, 3).map((item, idx) => {
-                                let textColor = 'text-indigo-500';
-                                if (idx === 0) textColor = 'text-indigo-500';
-                                else if (idx === 1) textColor = 'text-violet-500';
-                                else if (idx === 2) textColor = 'text-fuchsia-500';
+                                let textColor = 'text-rose-500';
+                                if (idx === 0) textColor = 'text-rose-500';
+                                else if (idx === 1) textColor = 'text-amber-500';
+                                else if (idx === 2) textColor = 'text-red-500';
                                 return (
                                   <span key={item.name} className={textColor}>{item.name.split(' ')[0]} ({item.percentage}%)</span>
                                 );
@@ -1778,11 +1777,11 @@ export default function App() {
 
                             <div className="grid grid-cols-2 gap-1.5 pt-1.5">
                               {columnKErrorsBreakdown.slice(0, 4).map((err, idx) => {
-                                let borderClass = 'border-indigo-100 bg-indigo-50/20 text-indigo-700';
-                                if (idx === 0) borderClass = 'border-indigo-100 bg-indigo-50/20 text-indigo-700';
-                                else if (idx === 1) borderClass = 'border-violet-100 bg-violet-50/20 text-violet-700';
-                                else if (idx === 2) borderClass = 'border-fuchsia-100 bg-fuchsia-50/20 text-fuchsia-700';
-                                else borderClass = 'border-pink-100 bg-pink-50/20 text-pink-700';
+                                let borderClass = 'border-rose-100 bg-rose-50/20 text-rose-700';
+                                if (idx === 0) borderClass = 'border-rose-100 bg-rose-50/20 text-rose-700';
+                                else if (idx === 1) borderClass = 'border-amber-100 bg-amber-50/20 text-amber-700';
+                                else if (idx === 2) borderClass = 'border-red-100 bg-red-50/20 text-red-700';
+                                else borderClass = 'border-orange-100 bg-orange-50/20 text-orange-700';
 
                                 return (
                                   <div key={err.name} className={`p-1 px-1.5 rounded-lg border text-[8px] font-semibold ${borderClass} flex flex-col justify-between`}>
