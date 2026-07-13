@@ -211,13 +211,18 @@ export default function App() {
         inputErrorDetails.push('Nome');
       }
 
-      // -- Link Iugu verification
+      // -- Perfil do Cliente verification
       let isIuguError = false;
-      if (!ticket.iuguUrl || ticket.iuguUrl.trim() === '' || ticket.iuguUrl.toLowerCase().includes('não informado') || ticket.iuguUrl.toLowerCase().includes('sem link') || !ticket.iuguUrl.toLowerCase().includes('iugu')) {
+      if (!ticket.iuguUrl || ticket.iuguUrl.trim() === '' || ticket.iuguUrl.toLowerCase().includes('não informado') || ticket.iuguUrl.toLowerCase().includes('sem link')) {
         isIuguError = true;
+      } else {
+        const urlLower = ticket.iuguUrl.toLowerCase();
+        if (!urlLower.includes('iugu') && !urlLower.includes('intranet') && !urlLower.includes('hero-os') && !urlLower.includes('heroos')) {
+          isIuguError = true;
+        }
       }
       if (isIuguError) {
-        inputErrorDetails.push('Link Iugu');
+        inputErrorDetails.push('Perfil do Cliente');
       }
 
       // -- Other data/desc based verification

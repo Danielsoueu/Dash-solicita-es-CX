@@ -164,7 +164,7 @@ export default function TicketDetailModal({
                         className="inline-flex items-center space-x-1.5 text-xs text-electric-rose hover:underline font-bold bg-electric-rose/5 px-3 py-1.5 rounded-lg border border-electric-rose/10"
                       >
                         <ExternalLink className="w-3.5 h-3.5" />
-                        <span>Ver Perfil IUGU</span>
+                        <span>Ver Perfil do Cliente</span>
                       </a>
                     </div>
                   )}
