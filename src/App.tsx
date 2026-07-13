@@ -457,6 +457,18 @@ export default function App() {
   // Compute filtered tickets for dashboard calculations
   const filteredTickets = useMemo(() => {
     return enhancedTickets.filter(ticket => {
+      // If we are in the analyst performance tab, filter only by the selected analyst and their month (if any)
+      if (activeTab === 'analyst') {
+        if (selectedAnalyst && ticket.formattedAgentName !== selectedAnalyst) {
+          return false;
+        }
+        if (selectedAnalystMonth && selectedAnalystMonth !== 'all' && ticket.monthYear !== selectedAnalystMonth) {
+          return false;
+        }
+        return true;
+      }
+
+      // Otherwise (activeTab === 'executive'), apply the standard executive dashboard filters
       // 1. Team Filter
       if (selectedTeam && ticket.team !== selectedTeam) {
         return false;
@@ -554,6 +566,9 @@ export default function App() {
     });
   }, [
     enhancedTickets, 
+    activeTab,
+    selectedAnalyst,
+    selectedAnalystMonth,
     searchTerm, 
     selectedTeam, 
     selectedPeriod, 
@@ -569,6 +584,28 @@ export default function App() {
     showOnlyInputError, 
     showOnlyRoutingError, 
     recurringClients
+  ]);
+
+  // Reset pagination to first page when activeTab or filter states change
+  useEffect(() => {
+    setCurrentPage(1);
+  }, [
+    activeTab,
+    selectedAnalyst,
+    selectedAnalystMonth,
+    selectedAgent,
+    selectedTeam,
+    selectedCategory,
+    selectedMonth,
+    selectedDay,
+    selectedPriority,
+    statusFilter,
+    showOnlyRecurring,
+    showOnlyInputError,
+    showOnlyRoutingError,
+    searchTerm,
+    startDate,
+    endDate
   ]);
 
   // Derived KPIs for Executive Summary
