@@ -39,3 +39,24 @@ export interface WordCloudItem {
   text: string;
   value: number;
 }
+
+export type UserRole = 'admin' | 'user';
+export type UserStatus = 'active' | 'inactive';
+
+export interface UserProfile {
+  uid: string;
+  email: string;
+  displayName: string;
+  photoURL?: string;
+  role: UserRole;
+  status: UserStatus;
+  createdAt: string;
+  lastLoginAt: string;
+}
+
+export type Language = 'pt' | 'en' | 'es';
+
+export interface AuthConfig {
+  allowedDomains: string[];
+  restrictedDomainMode: boolean;
+}

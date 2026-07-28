@@ -1,0 +1,36 @@
+{
+  "collections": [
+    {
+      "path": "users",
+      "description": "User profiles for authentication and role management",
+      "documents": [
+        {
+          "id": "sample_user",
+          "fields": {
+            "uid": "sample_uid",
+            "email": "admin@companyhero.com",
+            "displayName": "Admin Hero",
+            "photoURL": "https://lh3.googleusercontent.com/a/default-user",
+            "role": "admin",
+            "status": "active",
+            "createdAt": "2026-07-28T00:00:00.000Z",
+            "lastLoginAt": "2026-07-28T00:00:00.000Z"
+          }
+        }
+      ]
+    },
+    {
+      "path": "settings",
+      "description": "Global application configuration and allowed domains",
+      "documents": [
+        {
+          "id": "auth_config",
+          "fields": {
+            "allowedDomains": ["companyhero.com", "gmail.com"],
+            "restrictedDomainMode": false
+          }
+        }
+      ]
+    }
+  ]
+}
