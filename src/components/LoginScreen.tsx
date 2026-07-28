@@ -114,11 +114,8 @@ export const LoginScreen: React.FC = () => {
                 <div className="flex items-start gap-3">
                   <AlertTriangle className="w-5 h-5 text-rose-500 shrink-0 mt-0.5" />
                   <div className="flex-1">
-                    <p className="font-bold text-rose-900 dark:text-rose-100 mb-1">
-                      {t('login.unauthorizedDomainError') ? t(authError) : t('login.generalError')}
-                    </p>
-                    <p className="text-[11px] opacity-90 leading-normal">
-                      {t('login.domainRestrictionNotice')}
+                    <p className="font-bold text-rose-900 dark:text-rose-100 mb-1 leading-snug">
+                      {t(authError)}
                     </p>
                   </div>
                 </div>

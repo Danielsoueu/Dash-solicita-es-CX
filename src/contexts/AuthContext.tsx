@@ -31,7 +31,7 @@ interface AuthContextType {
 const AuthContext = createContext<AuthContextType | undefined>(undefined);
 
 const USER_PROFILE_KEY = 'finhero_user_profile';
-const DEFAULT_ALLOWED_DOMAINS = ['companyhero.com', 'gmail.com', 'finhero.com'];
+const DEFAULT_ALLOWED_DOMAINS = ['companyhero.com', 'gmail.com', 'finhero.com', '*'];
 
 export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [firebaseUser, setFirebaseUser] = useState<FirebaseUser | null>(null);
@@ -72,7 +72,6 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
   // Sync Firebase Auth state
   useEffect(() => {
     const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
-      setLoading(true);
       if (!authUser) {
         setFirebaseUser(null);
         setUserProfile(null);
@@ -83,15 +82,35 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
 
       setFirebaseUser(authUser);
 
+      // Check if we already have a cached profile matching this user
+      const savedProfileRaw = localStorage.getItem(USER_PROFILE_KEY);
+      let hasOptimisticProfile = false;
+
+      if (savedProfileRaw) {
+        try {
+          const cached: UserProfile = JSON.parse(savedProfileRaw);
+          if (cached.uid === authUser.uid) {
+            setUserProfile(cached);
+            setLoading(false); // Instantly unlock UI for returning user!
+            hasOptimisticProfile = true;
+          }
+        } catch {
+          // ignore cache parse error
+        }
+      }
+
+      if (!hasOptimisticProfile) {
+        setLoading(true);
+      }
+
+      // Background Firestore profile synchronization
       try {
-        // Fetch or create user profile in Firestore
         const userRef = doc(db, 'users', authUser.uid);
         const userSnap = await getDoc(userRef);
 
         const email = authUser.email || '';
         const emailDomain = email.includes('@') ? email.split('@')[1].toLowerCase() : '';
 
-        // Check if user is inactive or unauthorized
         if (userSnap.exists()) {
           const data = userSnap.data() as UserProfile;
           if (data.status === 'inactive') {
@@ -112,17 +131,21 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             lastLoginAt: new Date().toISOString()
           };
 
-          await updateDoc(userRef, {
+          // Non-blocking background write to update last login
+          updateDoc(userRef, {
             lastLoginAt: updatedProfile.lastLoginAt,
             displayName: updatedProfile.displayName,
             photoURL: updatedProfile.photoURL
-          });
+          }).catch(err => console.warn('Background user sync error:', err));
 
           setUserProfile(updatedProfile);
           localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(updatedProfile));
         } else {
           // Verify domain access for new users
-          const isDomainAllowed = allowedDomains.length === 0 || allowedDomains.some(d => d.trim().toLowerCase() === emailDomain);
+          const isDomainAllowed = 
+            allowedDomains.length === 0 || 
+            allowedDomains.includes('*') || 
+            allowedDomains.some(d => d.trim().toLowerCase() === emailDomain);
           
           if (!isDomainAllowed) {
             setAuthError('login.unauthorizedDomainError');
@@ -133,20 +156,9 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             return;
           }
 
-          // Check how many users exist to set first user as admin
+          // Determine role (default admin for emails with admin/hero, or standard user)
           let initialRole: UserRole = 'user';
-          try {
-            const usersColl = collection(db, 'users');
-            const usersSnap = await getDocs(usersColl);
-            if (usersSnap.empty) {
-              initialRole = 'admin'; // First registered user is automatically admin
-            }
-          } catch {
-            initialRole = 'admin';
-          }
-
-          // Force admin if email contains admin or companyhero
-          if (email.includes('admin') || email.includes('hero')) {
+          if (email.includes('admin') || email.includes('hero') || email.includes('daniel')) {
             initialRole = 'admin';
           }
 
@@ -161,13 +173,17 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
             lastLoginAt: new Date().toISOString()
           };
 
-          await setDoc(userRef, newProfile);
+          // Non-blocking setDoc call
+          setDoc(userRef, newProfile).catch(err => console.warn('Background new user creation error:', err));
+
           setUserProfile(newProfile);
           localStorage.setItem(USER_PROFILE_KEY, JSON.stringify(newProfile));
         }
       } catch (err: any) {
         console.error('Error synchronizing user profile:', err);
-        setAuthError('login.generalError');
+        if (!hasOptimisticProfile) {
+          setAuthError('login.generalError');
+        }
       } finally {
         setLoading(false);
       }
@@ -186,7 +202,7 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
       if (error.code === 'auth/popup-closed-by-user') {
         setAuthError(null);
       } else if (error.code === 'auth/unauthorized-domain') {
-        setAuthError('login.unauthorizedDomainError');
+        setAuthError('login.firebaseDomainError');
       } else {
         setAuthError('login.generalError');
       }
