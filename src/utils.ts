@@ -36,91 +36,112 @@ export function parsePortugueseDate(dateStr: string): string {
   if (!dateStr) return new Date().toISOString();
   
   const cleaned = dateStr.replace(/"/g, '').trim();
-  
-  const months: Record<string, number> = {
-    'jan': 0, 'fev': 1, 'mar': 2, 'abr': 3, 'mai': 4, 'jun': 5,
-    'jul': 6, 'ago': 7, 'set': 8, 'out': 9, 'nov': 10, 'dez': 11
+  if (!cleaned) return new Date().toISOString();
+
+  const monthsMap: Record<string, number> = {
+    // Portuguese
+    'jan': 0, 'janeiro': 0,
+    'fev': 1, 'fevereiro': 1,
+    'mar': 2, 'marco': 2, 'março': 2,
+    'abr': 3, 'abril': 3,
+    'mai': 4, 'maio': 4,
+    'jun': 5, 'junho': 5,
+    'jul': 6, 'julho': 6,
+    'ago': 7, 'agosto': 7,
+    'set': 8, 'setembro': 8,
+    'out': 9, 'outubro': 9,
+    'nov': 10, 'novembro': 10,
+    'dez': 11, 'dezembro': 11,
+    // English
+    'feb': 1, 'february': 1,
+    'march': 2,
+    'apr': 3, 'april': 3,
+    'may': 4,
+    'june': 5,
+    'july': 6,
+    'aug': 7, 'august': 7,
+    'sep': 8, 'september': 8,
+    'oct': 9, 'october': 9,
+    'dec': 11, 'december': 11
   };
 
-  // Format A: '6 de mar., 2026 15h23min37s' or '1º de abr., 2026 14h14min13s'
-  const dateMatchA = cleaned.match(/^(\d+)(?:º|ª)?\s+de\s+([^\s\.,]+)\.?,\s+(\d{4})/i);
-  if (dateMatchA) {
-    const day = parseInt(dateMatchA[1], 10);
-    const monthAbbr = dateMatchA[2].toLowerCase();
-    const year = parseInt(dateMatchA[3], 10);
-    
-    let monthIndex = 5; // default June
-    for (const [key, val] of Object.entries(months)) {
-      if (monthAbbr.startsWith(key)) {
-        monthIndex = val;
-        break;
-      }
-    }
+  const getMonthIndex = (abbr: string): number => {
+    const key = abbr.toLowerCase().replace('.', '').trim();
+    if (monthsMap[key] !== undefined) return monthsMap[key];
+    const key3 = key.substring(0, 3);
+    if (monthsMap[key3] !== undefined) return monthsMap[key3];
+    return 0;
+  };
 
-    // Parse time after the date part
-    const timePart = cleaned.substring(dateMatchA[0].length).trim();
+  // Format 1: Slash format e.g. '04/08/2026' or '04/08/2026 14:30:00'
+  const matchSlash = cleaned.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d+):(\d+):(\d+))?/);
+  if (matchSlash) {
+    const day = parseInt(matchSlash[1], 10);
+    const month = parseInt(matchSlash[2], 10) - 1;
+    const year = parseInt(matchSlash[3], 10);
+    const hour = matchSlash[4] ? parseInt(matchSlash[4], 10) : 0;
+    const minute = matchSlash[5] ? parseInt(matchSlash[5], 10) : 0;
+    const second = matchSlash[6] ? parseInt(matchSlash[6], 10) : 0;
+    return new Date(year, month, day, hour, minute, second).toISOString();
+  }
+
+  // Format 2: English format with optional AM/PM e.g. 'Aug 3, 2026, 3:47:33 PM' or 'May 29, 2026, 6:36:08 PM'
+  const matchEN = cleaned.match(/^([A-Za-z]+)\.?\s+(\d+),\s+(\d{4}),\s+(\d+):(\d+):(\d+)(?:\s*(AM|PM))?/i);
+  if (matchEN) {
+    const monthIndex = getMonthIndex(matchEN[1]);
+    const day = parseInt(matchEN[2], 10);
+    const year = parseInt(matchEN[3], 10);
+    let hour = parseInt(matchEN[4], 10);
+    const minute = parseInt(matchEN[5], 10);
+    const second = parseInt(matchEN[6], 10);
+    const ampm = matchEN[7] ? matchEN[7].toUpperCase() : null;
+    if (ampm === 'PM' && hour < 12) hour += 12;
+    if (ampm === 'AM' && hour === 12) hour = 0;
+    return new Date(year, monthIndex, day, hour, minute, second).toISOString();
+  }
+
+  // Format 3: PT format with 'de' e.g. '6 de mar., 2026 15h23min37s' or '1º de abr., 2026 14h14min13s' or '3 de ago. de 2026'
+  const matchPTde = cleaned.match(/^(\d+)(?:º|ª)?\s+de\s+([^\s\.,]+)\.?(?:,|de)?\s+(\d{4})(.*)/i);
+  if (matchPTde) {
+    const day = parseInt(matchPTde[1], 10);
+    const monthIndex = getMonthIndex(matchPTde[2]);
+    const year = parseInt(matchPTde[3], 10);
+    const timePart = matchPTde[4] ? matchPTde[4].trim() : '';
+
     let hour = 0;
     let minute = 0;
     let second = 0;
 
     const hMatch = timePart.match(/(\d+)\s*h/i);
-    if (hMatch) {
-      hour = parseInt(hMatch[1], 10);
-    }
+    if (hMatch) hour = parseInt(hMatch[1], 10);
 
     const minMatch = timePart.match(/(\d+)\s*min/i);
     if (minMatch) {
       minute = parseInt(minMatch[1], 10);
     } else {
-      // Check for formats like '19h57' or '12h36' where minutes follow 'h' and don't end with 's'
       const altMinMatch = timePart.match(/h\s*(\d+)(?!\s*s)/i);
-      if (altMinMatch) {
-        minute = parseInt(altMinMatch[1], 10);
-      }
+      if (altMinMatch) minute = parseInt(altMinMatch[1], 10);
     }
 
     const sMatch = timePart.match(/(\d+)\s*s/i);
-    if (sMatch) {
-      second = parseInt(sMatch[1], 10);
-    }
+    if (sMatch) second = parseInt(sMatch[1], 10);
 
     return new Date(year, monthIndex, day, hour, minute, second).toISOString();
   }
 
-  // Format B: 'jun. 18, 2026, 13:04:31'
-  const regexB = /([^\s\.,]+)\.?\s+(\d+),\s+(\d{4}),\s+(\d+):(\d+):(\d+)/;
-  const matchB = cleaned.match(regexB);
-  if (matchB) {
-    const monthAbbr = matchB[1].toLowerCase();
-    const day = parseInt(matchB[2], 10);
-    const year = parseInt(matchB[3], 10);
-    const hour = parseInt(matchB[4], 10);
-    const minute = parseInt(matchB[5], 10);
-    const second = parseInt(matchB[6], 10);
-    
-    let monthIndex = 5; // default June
-    for (const [key, val] of Object.entries(months)) {
-      if (monthAbbr.startsWith(key)) {
-        monthIndex = val;
-        break;
-      }
-    }
+  // Format 4: PT format B e.g. 'jul. 14, 2026, 19:59:40'
+  const matchPTb = cleaned.match(/^([^\s\.,]+)\.?\s+(\d+),\s+(\d{4}),\s+(\d+):(\d+):(\d+)/i);
+  if (matchPTb) {
+    const monthIndex = getMonthIndex(matchPTb[1]);
+    const day = parseInt(matchPTb[2], 10);
+    const year = parseInt(matchPTb[3], 10);
+    const hour = parseInt(matchPTb[4], 10);
+    const minute = parseInt(matchPTb[5], 10);
+    const second = parseInt(matchPTb[6], 10);
     return new Date(year, monthIndex, day, hour, minute, second).toISOString();
   }
 
-  // Format C: 'DD/MM/YYYY HH:mm:ss'
-  const regexC = /(\d{1,2})\/(\d{1,2})\/(\d{4})(?:\s+(\d+):(\d+):(\d+))?/;
-  const matchC = cleaned.match(regexC);
-  if (matchC) {
-    const day = parseInt(matchC[1], 10);
-    const month = parseInt(matchC[2], 10) - 1;
-    const year = parseInt(matchC[3], 10);
-    const hour = matchC[4] ? parseInt(matchC[4], 10) : 0;
-    const minute = matchC[5] ? parseInt(matchC[5], 10) : 0;
-    const second = matchC[6] ? parseInt(matchC[6], 10) : 0;
-    return new Date(year, month, day, hour, minute, second).toISOString();
-  }
-
+  // Fallback to standard JS Date.parse
   const standardDate = Date.parse(cleaned);
   if (!isNaN(standardDate)) {
     return new Date(standardDate).toISOString();
@@ -161,8 +182,36 @@ export function extractKeywords(text: string): string[] {
     .map(([word]) => word);
 }
 
+export function splitCSVToRows(csvText: string): string[] {
+  const rows: string[] = [];
+  let currentRow = '';
+  let inQuotes = false;
+
+  for (let i = 0; i < csvText.length; i++) {
+    const char = csvText[i];
+    if (char === '"') {
+      inQuotes = !inQuotes;
+      currentRow += char;
+    } else if ((char === '\n' || char === '\r') && !inQuotes) {
+      if (char === '\r' && csvText[i + 1] === '\n') {
+        i++;
+      }
+      if (currentRow.trim()) {
+        rows.push(currentRow);
+      }
+      currentRow = '';
+    } else {
+      currentRow += char;
+    }
+  }
+  if (currentRow.trim()) {
+    rows.push(currentRow);
+  }
+  return rows;
+}
+
 export function parseGoogleSheetsCSV(csvText: string): Ticket[] {
-  const lines = csvText.split('\n');
+  const lines = splitCSVToRows(csvText);
   if (lines.length < 2) return [];
 
   const tickets: Ticket[] = [];

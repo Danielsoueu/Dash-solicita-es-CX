@@ -3,7 +3,7 @@
  * SPDX-License-Identifier: Apache-2.0
  */
 
-import React, { useState, useMemo, useEffect, useRef } from 'react';
+import React, { useState, useMemo, useEffect, useRef, useCallback } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { 
   Search, 
@@ -339,54 +339,57 @@ function DashboardApp() {
     }));
   };
 
-  // Fetch spreadsheet data at startup
-  useEffect(() => {
-    async function loadSpreadsheetData() {
-      try {
-        setIsLoading(true);
-        const url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ_X5Oc6ttxxwsMc4n0ywO1JrE7Eryi0-ubqaATPADMc5ZbxK8kYJfhS4kzPKWNsV6GjO82zzhVeQed/pub?gid=308255528&single=true&output=csv';
-        const res = await fetch(url);
-        if (!res.ok) {
-          throw new Error(`Status HTTP: ${res.status}`);
-        }
-        const text = await res.text();
-        const parsed = parseGoogleSheetsCSV(text);
-        if (parsed && parsed.length > 0) {
-          setTickets(parsed);
-          setIsLive(true);
-          setError(null);
-        } else {
-          throw new Error("Planilha vazia ou em formato incorreto.");
-        }
-      } catch (err: any) {
-        console.error("Erro ao carregar dados do banco Google Sheets:", err);
-        setError("Não foi possível carregar os dados em tempo real. Exibindo banco de dados local integrado.");
-        setIsLive(false);
-      } finally {
-        setIsLoading(false);
-      }
-    }
-    loadSpreadsheetData();
-  }, []);
-
-  // Manual data reload function
-  const handleReload = async () => {
+  // Fetch spreadsheet data with cache-busting
+  const fetchSpreadsheetData = useCallback(async (showLoadingSpinner = true) => {
     try {
-      setIsLoading(true);
-      const url = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ_X5Oc6ttxxwsMc4n0ywO1JrE7Eryi0-ubqaATPADMc5ZbxK8kYJfhS4kzPKWNsV6GjO82zzhVeQed/pub?gid=308255528&single=true&output=csv';
-      const res = await fetch(url);
+      if (showLoadingSpinner) setIsLoading(true);
+      const url = `https://docs.google.com/spreadsheets/d/e/2PACX-1vQ_X5Oc6ttxxwsMc4n0ywO1JrE7Eryi0-ubqaATPADMc5ZbxK8kYJfhS4kzPKWNsV6GjO82zzhVeQed/pub?gid=308255528&single=true&output=csv&_t=${Date.now()}`;
+      const res = await fetch(url, { cache: 'no-store', headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' } });
+      if (!res.ok) {
+        throw new Error(`Status HTTP: ${res.status}`);
+      }
       const text = await res.text();
       const parsed = parseGoogleSheetsCSV(text);
       if (parsed && parsed.length > 0) {
         setTickets(parsed);
         setIsLive(true);
         setError(null);
+      } else {
+        throw new Error("Planilha vazia ou em formato incorreto.");
       }
-    } catch (err) {
-      setError("Erro ao atualizar dados em tempo real da planilha.");
+    } catch (err: any) {
+      console.error("Erro ao carregar dados do banco Google Sheets:", err);
+      setError("Não foi possível carregar os dados em tempo real da planilha.");
+      setIsLive(false);
     } finally {
-      setIsLoading(false);
+      if (showLoadingSpinner) setIsLoading(false);
     }
+  }, []);
+
+  // Fetch spreadsheet data at startup and set up automatic auto-refresh interval
+  useEffect(() => {
+    fetchSpreadsheetData(true);
+
+    // Auto refresh every 45 seconds to keep data live
+    const interval = setInterval(() => {
+      fetchSpreadsheetData(false);
+    }, 45000);
+
+    // Re-fetch when tab regains focus
+    const onFocus = () => {
+      fetchSpreadsheetData(false);
+    };
+    window.addEventListener('focus', onFocus);
+
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('focus', onFocus);
+    };
+  }, [fetchSpreadsheetData]);
+
+  // Manual data reload function
+  const handleReload = async () => {
+    await fetchSpreadsheetData(true);
   };
 
   // Find the currently open ticket object
