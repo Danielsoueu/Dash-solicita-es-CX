@@ -103,8 +103,9 @@ export default function PriorityPieChart({ filteredTickets }: PriorityPieChartPr
             cy="60"
             r={radius}
             fill="transparent"
-            stroke="#f1f5f9"
+            stroke="currentColor"
             strokeWidth={strokeWidth}
+            className="text-slate-100 dark:text-slate-800"
           />
           
           {/* Interactive slices */}
@@ -135,13 +136,13 @@ export default function PriorityPieChart({ filteredTickets }: PriorityPieChartPr
 
         {/* Core Center Label */}
         <div className="absolute flex flex-col items-center justify-center text-center">
-          <span className="text-[10px] font-bold text-slate-400 uppercase tracking-wider">
+          <span className="text-[10px] font-bold text-slate-400 dark:text-slate-500 uppercase tracking-wider">
             Total
           </span>
-          <span className="text-2xl font-black font-mono text-obsidian-black">
+          <span className="text-2xl font-black font-mono text-slate-900 dark:text-white">
             {totalCount}
           </span>
-          <span className="text-[9px] text-slate-500 font-medium">
+          <span className="text-[9px] text-slate-500 dark:text-slate-400 font-medium">
             chamados
           </span>
         </div>
@@ -155,7 +156,7 @@ export default function PriorityPieChart({ filteredTickets }: PriorityPieChartPr
             <div
               key={slice.priority}
               className={`flex items-center justify-between p-1.5 rounded-lg transition-all ${
-                isHovered ? 'bg-slate-50' : 'bg-transparent'
+                isHovered ? 'bg-slate-100 dark:bg-slate-800/80' : 'bg-transparent'
               }`}
               onMouseEnter={() => setHoveredIndex(index)}
               onMouseLeave={() => setHoveredIndex(null)}
@@ -165,12 +166,12 @@ export default function PriorityPieChart({ filteredTickets }: PriorityPieChartPr
                   className="w-3 h-3 rounded-full shrink-0"
                   style={{ backgroundColor: slice.color }}
                 />
-                <span className="text-xs font-semibold text-slate-700">
+                <span className="text-xs font-semibold text-slate-700 dark:text-slate-200">
                   {slice.priority}
                 </span>
               </div>
               <div className="flex items-center space-x-3 text-right">
-                <span className="text-xs font-bold text-obsidian-black font-mono">
+                <span className="text-xs font-bold text-slate-900 dark:text-white font-mono">
                   {slice.count} {slice.count === 1 ? 'chamado' : 'chamados'}
                 </span>
                 <span className="text-xs font-extrabold text-electric-rose font-mono w-10">

@@ -67,7 +67,7 @@ export default function WordCloud({ filteredTickets, selectedWord, onSelectWord 
         <p className="text-[11px] text-slate-500 mb-3">
           Tópicos extraídos das solicitações ativas. Clique para filtrar a dashboard de imediato.
         </p>
-        <div className="flex flex-wrap gap-1.5 justify-center items-center py-3 px-2 bg-slate-50/50 rounded-xl border border-slate-100 min-h-[120px]">
+        <div className="flex flex-wrap gap-1.5 justify-center items-center py-3 px-2 bg-slate-50/50 dark:bg-slate-900/60 rounded-xl border border-slate-100 dark:border-slate-800 min-h-[120px]">
           {displayedFrequencies.map((item, index) => {
             const isSelected = selectedWord === item.text;
             return (
@@ -83,13 +83,13 @@ export default function WordCloud({ filteredTickets, selectedWord, onSelectWord 
                   ${
                     isSelected
                       ? 'bg-electric-rose text-white shadow-xs'
-                      : 'bg-white hover:bg-slate-100 text-obsidian-black border border-slate-200/60 hover:text-electric-rose hover:border-electric-rose/30'
+                      : 'bg-white dark:bg-slate-800 hover:bg-slate-100 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border border-slate-200/60 dark:border-slate-700 hover:text-electric-rose dark:hover:text-electric-rose hover:border-electric-rose/30'
                   }
                 `}
                 title={`${item.value} solicitações`}
               >
                 <span>{item.text}</span>
-                <span className={`ml-1 text-[9px] px-1 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 text-slate-500'}`}>
+                <span className={`ml-1 text-[9px] px-1 rounded-full ${isSelected ? 'bg-white/20 text-white' : 'bg-slate-100 dark:bg-slate-900 text-slate-600 dark:text-slate-400'}`}>
                   {item.value}
                 </span>
               </motion.button>

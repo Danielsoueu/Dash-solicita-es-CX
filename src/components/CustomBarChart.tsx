@@ -72,18 +72,18 @@ export default function CustomBarChart({ filteredTickets, selectedTeam, onSelect
                 key={item.team} 
                 className={`p-3 rounded-xl transition-all border duration-200 ${
                   isSelected 
-                    ? 'bg-slate-950 text-white border-slate-900 shadow-md' 
-                    : 'bg-white hover:bg-slate-50 border-slate-100 hover:border-slate-200'
+                    ? 'bg-slate-900 dark:bg-slate-800 text-white border-slate-900 dark:border-slate-700 shadow-md' 
+                    : 'bg-white dark:bg-slate-900/90 hover:bg-slate-50 dark:hover:bg-slate-800/60 border-slate-100 dark:border-slate-800/80 hover:border-slate-200 dark:hover:border-slate-700'
                 }`}
               >
                 <div className="flex items-center justify-between mb-2">
                   <div className="flex items-center space-x-3">
-                    <div className={`p-2 rounded-lg ${isSelected ? 'bg-electric-rose text-white' : 'bg-slate-100 text-obsidian-black'}`}>
+                    <div className={`p-2 rounded-lg ${isSelected ? 'bg-electric-rose text-white' : 'bg-slate-100 dark:bg-slate-800 text-slate-700 dark:text-slate-300'}`}>
                       <IconComponent className="w-4 h-4" />
                     </div>
                     <button 
                       onClick={() => onSelectTeam(isSelected ? null : item.team)}
-                      className="font-sans font-semibold text-sm hover:text-electric-rose transition-colors cursor-pointer text-left"
+                      className="font-sans font-semibold text-sm text-slate-900 dark:text-white hover:text-electric-rose dark:hover:text-electric-rose transition-colors cursor-pointer text-left"
                     >
                       {item.team}
                     </button>
@@ -93,22 +93,22 @@ export default function CustomBarChart({ filteredTickets, selectedTeam, onSelect
                     <span className="text-xs text-slate-400 font-mono">
                       {percentageOfTotal}% do total
                     </span>
-                    <span className={`text-sm font-bold font-mono ${isSelected ? 'text-electric-rose' : 'text-obsidian-black'}`}>
+                    <span className={`text-sm font-bold font-mono ${isSelected ? 'text-electric-rose' : 'text-slate-900 dark:text-white'}`}>
                       {item.count} chamados
                     </span>
                   </div>
                 </div>
 
-                <div className="relative w-full h-3 bg-slate-100 rounded-full overflow-hidden">
+                <div className="relative w-full h-3 bg-slate-100 dark:bg-slate-800 rounded-full overflow-hidden">
                   <motion.div 
                     initial={{ width: 0 }}
                     animate={{ width: `${percentageOfMax}%` }}
                     transition={{ duration: 0.6, ease: 'easeOut' }}
-                    className={`h-full rounded-full ${isSelected ? 'bg-electric-rose' : 'bg-obsidian-black'}`}
+                    className={`h-full rounded-full ${isSelected ? 'bg-electric-rose' : 'bg-slate-800 dark:bg-slate-300'}`}
                   />
                 </div>
 
-                <div className="flex items-center justify-end mt-2 pt-1.5 border-t border-slate-100/10 text-[11px] text-slate-400">
+                <div className="flex items-center justify-end mt-2 pt-1.5 border-t border-slate-100 dark:border-slate-800/60 text-[11px] text-slate-400">
                   <button
                     onClick={() => onSelectTeam(isSelected ? null : item.team)}
                     className="text-electric-rose hover:underline font-semibold cursor-pointer text-xs"
