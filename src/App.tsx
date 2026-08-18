@@ -34,11 +34,12 @@ import {
   Filter,
   BarChart4,
   User,
-  AlertTriangle
+  AlertTriangle,
+  Tag
 } from 'lucide-react';
 import { Ticket } from './types';
 import { INITIAL_TICKETS } from './data';
-import { parseGoogleSheetsCSV } from './utils';
+import { parseGoogleSheetsCSV, normalizeAnalystName } from './utils';
 import TicketDetailModal from './components/TicketDetailModal';
 import BrasiliaClock from './components/BrasiliaClock';
 import { AuthProvider, useAuth } from './contexts/AuthContext';
@@ -46,6 +47,7 @@ import { LanguageProvider, useLanguage } from './contexts/LanguageContext';
 import { ThemeProvider, useTheme } from './contexts/ThemeContext';
 import { LoginScreen } from './components/LoginScreen';
 import { UserManagement } from './components/UserManagement';
+import TeamAnalystOverview from './components/TeamAnalystOverview';
 import { 
   LogOut, 
   Globe, 
@@ -80,16 +82,7 @@ export const getTicketMonthYearFast = (dateStr: string): string => {
 };
 
 export const formatAgentNameFast = (rawName: string | undefined): string => {
-  if (!rawName) return '';
-  let name = rawName.trim();
-  if (name.startsWith('@')) {
-    name = name.substring(1);
-  }
-  const indexAt = name.indexOf('@');
-  if (indexAt !== -1) {
-    name = name.substring(0, indexAt);
-  }
-  return name.split(/[\._]/).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+  return normalizeAnalystName(rawName);
 };
 
 const localDayCache: Record<string, string> = {};
@@ -120,8 +113,8 @@ function DashboardApp() {
   const [error, setError] = useState<string | null>(null);
   const [isLive, setIsLive] = useState(false);
 
-  // Active View Tab State ('executive' | 'analyst' | 'users')
-  const [activeTab, setActiveTab] = useState<'executive' | 'analyst' | 'users'>('executive');
+  // Active View Tab State ('executive' | 'team_overview' | 'analyst' | 'users')
+  const [activeTab, setActiveTab] = useState<'executive' | 'team_overview' | 'analyst' | 'users'>('executive');
   
   // Filtering States
   const [searchTerm, setSearchTerm] = useState('');
@@ -360,16 +353,32 @@ function DashboardApp() {
     }));
   };
 
-  // Fetch spreadsheet data with cache-busting
+  // Fetch spreadsheet data with proxy and direct fallback
   const fetchSpreadsheetData = useCallback(async (showLoadingSpinner = true) => {
     try {
       if (showLoadingSpinner) setIsLoading(true);
-      const url = `https://docs.google.com/spreadsheets/d/e/2PACX-1vQ_X5Oc6ttxxwsMc4n0ywO1JrE7Eryi0-ubqaATPADMc5ZbxK8kYJfhS4kzPKWNsV6GjO82zzhVeQed/pub?gid=308255528&single=true&output=csv&_t=${Date.now()}`;
-      const res = await fetch(url, { cache: 'no-store', headers: { 'Pragma': 'no-cache', 'Cache-Control': 'no-cache' } });
-      if (!res.ok) {
-        throw new Error(`Status HTTP: ${res.status}`);
+      let text = '';
+      
+      // 1. Try server-side proxy endpoint first (avoids CORS, preflights, and client redirect issues)
+      try {
+        const proxyRes = await fetch('/api/sheets');
+        if (proxyRes.ok) {
+          text = await proxyRes.text();
+        }
+      } catch {
+        // Continue to fallback
       }
-      const text = await res.text();
+
+      // 2. Fallback to direct Google Sheets published CSV URL if proxy was not used
+      if (!text || text.trim().length === 0) {
+        const directUrl = 'https://docs.google.com/spreadsheets/d/e/2PACX-1vQ_X5Oc6ttxxwsMc4n0ywO1JrE7Eryi0-ubqaATPADMc5ZbxK8kYJfhS4kzPKWNsV6GjO82zzhVeQed/pub?gid=308255528&single=true&output=csv';
+        const directRes = await fetch(directUrl);
+        if (!directRes.ok) {
+          throw new Error(`Status HTTP: ${directRes.status}`);
+        }
+        text = await directRes.text();
+      }
+
       const parsed = parseGoogleSheetsCSV(text);
       if (parsed && parsed.length > 0) {
         setTickets(parsed);
@@ -868,7 +877,7 @@ function DashboardApp() {
   const analystMetrics = useMemo(() => {
     if (!selectedAnalyst) return null;
 
-    let analystTickets = enhancedTickets.filter(t => formatAgentName(t.agentName) === selectedAnalyst);
+    let analystTickets = enhancedTickets.filter(t => (t.formattedAgentName || normalizeAnalystName(t.agentName)) === selectedAnalyst);
     if (selectedAnalystMonth && selectedAnalystMonth !== 'all') {
       analystTickets = analystTickets.filter(t => t.monthYear === selectedAnalystMonth);
     }
@@ -995,6 +1004,40 @@ function DashboardApp() {
     showOnlyRecurring || 
     showOnlyInputError || 
     showOnlyRoutingError;
+
+  const totalActiveFiltersCount = useMemo(() => {
+    let count = 0;
+    if (selectedCategory !== null) count++;
+    if (selectedTeam !== null) count++;
+    if (selectedPeriod !== 'all' && !selectedMonth && !selectedDay) count++;
+    if (selectedAgent !== null) count++;
+    if (selectedMonth !== null) count++;
+    if (selectedDay !== null) count++;
+    if (selectedPriority !== null) count++;
+    if (statusFilter !== 'all') count++;
+    if (startDate !== '' || endDate !== '') count++;
+    if (showOnlyRecurring) count++;
+    if (showOnlyInputError) count++;
+    if (showOnlyRoutingError) count++;
+    if (searchTerm !== '' || inputSearch !== '') count++;
+    return count;
+  }, [
+    selectedCategory,
+    selectedTeam,
+    selectedPeriod,
+    selectedAgent,
+    selectedMonth,
+    selectedDay,
+    selectedPriority,
+    statusFilter,
+    startDate,
+    endDate,
+    showOnlyRecurring,
+    showOnlyInputError,
+    showOnlyRoutingError,
+    searchTerm,
+    inputSearch,
+  ]);
 
   // If authenticating, display smooth brand loading screen
   if (authLoading) {
@@ -1163,10 +1206,10 @@ function DashboardApp() {
         </div>
 
         {/* SLIDING TAB NAVIGATION SYSTEM */}
-        <div className="flex space-x-1 bg-slate-200/60 dark:bg-slate-800 p-1.5 rounded-2xl max-w-xl">
+        <div className="flex flex-wrap gap-1 bg-slate-200/60 dark:bg-slate-800 p-1.5 rounded-2xl max-w-2xl">
           <button
             onClick={() => setActiveTab('executive')}
-            className={`flex-1 py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer text-center flex items-center justify-center space-x-2 ${
+            className={`flex-1 min-w-[130px] py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer text-center flex items-center justify-center space-x-2 ${
               activeTab === 'executive' 
                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-md font-extrabold' 
                 : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -1175,16 +1218,28 @@ function DashboardApp() {
             <BarChart4 className="w-3.5 h-3.5 text-[#FF0066]" />
             <span>{t('nav.executiveDashboard')}</span>
           </button>
-          
+
           <button
-            onClick={() => setActiveTab('analyst')}
-            className={`flex-1 py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer text-center flex items-center justify-center space-x-2 ${
-              activeTab === 'analyst' 
+            onClick={() => setActiveTab('team_overview')}
+            className={`flex-1 min-w-[150px] py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer text-center flex items-center justify-center space-x-2 ${
+              activeTab === 'team_overview' 
                 ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-md font-extrabold' 
                 : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
             }`}
           >
             <Users className="w-3.5 h-3.5 text-[#FF0066]" />
+            <span>{t('nav.teamOverview')}</span>
+          </button>
+          
+          <button
+            onClick={() => setActiveTab('analyst')}
+            className={`flex-1 min-w-[130px] py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer text-center flex items-center justify-center space-x-2 ${
+              activeTab === 'analyst' 
+                ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-md font-extrabold' 
+                : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
+            }`}
+          >
+            <User className="w-3.5 h-3.5 text-[#FF0066]" />
             <span>{t('nav.analystPerformance')}</span>
           </button>
 
@@ -1192,7 +1247,7 @@ function DashboardApp() {
           {userProfile?.role === 'admin' && (
             <button
               onClick={() => setActiveTab('users')}
-              className={`flex-1 py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer text-center flex items-center justify-center space-x-2 ${
+              className={`flex-1 min-w-[130px] py-2.5 px-3 text-xs font-bold rounded-xl transition-all cursor-pointer text-center flex items-center justify-center space-x-2 ${
                 activeTab === 'users' 
                   ? 'bg-white dark:bg-slate-900 text-slate-900 dark:text-white shadow-md font-extrabold' 
                   : 'text-slate-500 hover:text-slate-900 dark:text-slate-400 dark:hover:text-white'
@@ -1217,338 +1272,367 @@ function DashboardApp() {
           </div>
         ) : (
           <>
-            {/* 2. REORGANIZED & SIMPLIFIED FILTER BAR */}
+            {/* 2. ULTRA-COMPACT FILTER BAR WITH HIGH VISIBILITY */}
             {activeTab === 'executive' && (
-              <section id="filters-panel" className="bg-white rounded-2xl border border-slate-200 p-5 shadow-xs space-y-4">
-              <div className="flex items-center justify-between pb-3 border-b border-slate-100">
-                <div className="flex items-center space-x-2">
-                  <Sliders className="w-4 h-4 text-electric-rose" />
-                  <h2 className="text-xs font-bold text-obsidian-black uppercase tracking-wider">
-                    Filtros de Segmentação
-                  </h2>
-                </div>
-                
-                <div className="flex items-center space-x-2">
-                  {hasActiveFilters && (
+              <section id="filters-panel" className="bg-white dark:bg-slate-900 rounded-2xl border-2 border-slate-200 dark:border-slate-800 p-3 sm:px-4 sm:py-3 shadow-sm transition-all space-y-2.5">
+                <div className="flex flex-wrap items-center justify-between gap-3">
+                  
+                  {/* Left: FILTROS ATIVOS: + Badges / Status */}
+                  <div className="flex flex-wrap items-center gap-2.5 min-w-0">
+                    {/* High-visibility FILTROS ATIVOS Label Badge */}
+                    <div className="flex items-center space-x-1.5 px-3 py-1.5 bg-slate-900 dark:bg-slate-100 text-white dark:text-slate-900 rounded-xl text-xs font-black tracking-wider uppercase shadow-xs">
+                      <Filter className="w-3.5 h-3.5 text-[#FF0066]" />
+                      <span>FILTROS ATIVOS:</span>
+                    </div>
+
+                    {!hasActiveFilters ? (
+                      <div className="flex items-center space-x-2 px-3 py-1.5 bg-emerald-50 dark:bg-emerald-950/50 border border-emerald-300 dark:border-emerald-800 rounded-xl text-emerald-800 dark:text-emerald-300 text-xs font-bold shadow-xs">
+                        <span className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse"></span>
+                        <span>Nenhum ativo (Exibindo 100% da base: <strong>{filteredTickets.length.toLocaleString('pt-BR')}</strong> chamados)</span>
+                      </div>
+                    ) : (
+                      <div className="flex flex-wrap items-center gap-2">
+                        {selectedCategory && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-[#FF0066] text-white rounded-xl text-xs font-black shadow-xs border border-pink-400/40">
+                            <span>Assunto: {selectedCategory}</span>
+                            <button onClick={() => setSelectedCategory(null)} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-black/40 text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                        {selectedTeam && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-slate-800 dark:bg-slate-700 text-white rounded-xl text-xs font-bold border border-slate-700 dark:border-slate-600 shadow-xs">
+                            <span>Equipe: {selectedTeam}</span>
+                            <button onClick={() => setSelectedTeam(null)} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-[#FF0066] text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                        {selectedAgent && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-indigo-600 text-white rounded-xl text-xs font-bold shadow-xs border border-indigo-400/30">
+                            <span>Analista: {selectedAgent}</span>
+                            <button onClick={() => setSelectedAgent(null)} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-red-500 text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                        {selectedPeriod !== 'all' && !selectedMonth && !selectedDay && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-slate-800 dark:bg-slate-700 text-white rounded-xl text-xs font-bold border border-slate-700 shadow-xs">
+                            <span>Período: {selectedPeriod === 'today' ? 'Hoje' : selectedPeriod === '7days' ? '7 dias' : '30 dias'}</span>
+                            <button onClick={() => setSelectedPeriod('all')} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-[#FF0066] text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                        {selectedMonth && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-xs">
+                            <span>Mês: {selectedMonth}</span>
+                            <button onClick={() => setSelectedMonth(null)} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-[#FF0066] text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                        {selectedDay && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-cyan-700 text-white rounded-xl text-xs font-bold shadow-xs">
+                            <span>Dia: {selectedDay}</span>
+                            <button onClick={() => setSelectedDay(null)} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-[#FF0066] text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                        {selectedPriority && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-purple-700 text-white rounded-xl text-xs font-bold shadow-xs">
+                            <span>Gravidade: {selectedPriority}</span>
+                            <button onClick={() => setSelectedPriority(null)} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-[#FF0066] text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                        {statusFilter !== 'all' && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-slate-800 dark:bg-slate-700 text-white rounded-xl text-xs font-bold shadow-xs">
+                            <span>Status: {statusFilter === 'resolved' ? 'Resolvido' : 'Em Aberto'}</span>
+                            <button onClick={() => setStatusFilter('all')} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-[#FF0066] text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                        {showOnlyRecurring && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-amber-500 text-white rounded-xl text-xs font-black shadow-xs">
+                            <span>Reincidentes</span>
+                            <button onClick={() => setShowOnlyRecurring(false)} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-black text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                        {showOnlyInputError && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-red-600 text-white rounded-xl text-xs font-black shadow-xs">
+                            <span>Erro Cadastro</span>
+                            <button onClick={() => setShowOnlyInputError(false)} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-black text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                        {showOnlyRoutingError && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-indigo-600 text-white rounded-xl text-xs font-black shadow-xs">
+                            <span>Erro Roteamento</span>
+                            <button onClick={() => setShowOnlyRoutingError(false)} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-black text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                        {searchTerm && (
+                          <span className="inline-flex items-center space-x-1 px-3 py-1 bg-slate-900 dark:bg-slate-800 text-white rounded-xl text-xs font-bold border border-slate-700 shadow-xs">
+                            <span>Busca: "{searchTerm}"</span>
+                            <button onClick={() => { setSearchTerm(''); setInputSearch(''); }} className="ml-1.5 p-0.5 rounded-full bg-black/20 hover:bg-[#FF0066] text-white font-black cursor-pointer leading-none">✕</button>
+                          </span>
+                        )}
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Right: MAIS FILTROS Button & Limpar */}
+                  <div className="flex items-center space-x-2 shrink-0">
+                    {hasActiveFilters && (
+                      <button
+                        onClick={handleResetFilters}
+                        className="flex items-center space-x-1 px-3 py-1.5 bg-red-50 hover:bg-red-100 dark:bg-red-950/40 dark:hover:bg-red-900/60 text-red-600 dark:text-red-400 rounded-xl text-xs font-black border border-red-200 dark:border-red-800/60 cursor-pointer transition-all active:scale-95 shadow-xs"
+                        title="Limpar todos os filtros ativos"
+                      >
+                        <RotateCcw className="w-3 h-3" />
+                        <span>Limpar Tudo</span>
+                      </button>
+                    )}
+
                     <button
-                      onClick={handleResetFilters}
-                      className="flex items-center space-x-1 text-xs text-electric-rose hover:text-white hover:bg-electric-rose px-2.5 py-1.5 rounded-lg border border-electric-rose/20 cursor-pointer transition-all font-bold"
-                    >
-                      <RotateCcw className="w-3 h-3" />
-                      <span>Limpar Filtros</span>
-                    </button>
-                  )}
-
-                  <button
-                    onClick={() => setShowFilters(!showFilters)}
-                    className="flex items-center space-x-1.5 text-xs text-slate-600 hover:text-slate-800 font-bold bg-slate-100 hover:bg-slate-200 px-2.5 py-1.5 rounded-lg border border-slate-200 cursor-pointer transition-all"
-                  >
-                    <SlidersHorizontal className="w-3.5 h-3.5 text-slate-500" />
-                    <span>{showFilters ? 'Ocultar Filtros' : 'Exibir Filtros'}</span>
-                  </button>
-                </div>
-              </div>
-
-              {showFilters && (
-                <div className="space-y-4">
-                  {/* Principal Always Visible Filters Grid */}
-                  <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-5 gap-3.5">
-                    {/* Period selection */}
-                    <div className="flex flex-col">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Período de Análise</label>
-                      <div className="grid grid-cols-4 bg-slate-100 p-1 rounded-xl border border-slate-200/50">
-                        {(['all', 'today', '7days', '30days'] as const).map((period) => (
-                          <button
-                            key={period}
-                            onClick={() => {
-                              setSelectedPeriod(period);
-                              setSelectedMonth(null);
-                              setSelectedDay(null);
-                            }}
-                            className={`py-1.5 text-[10px] font-bold rounded-lg transition-all cursor-pointer text-center capitalize ${
-                              selectedPeriod === period && !selectedMonth && !selectedDay
-                                ? 'bg-white text-obsidian-black shadow-xs font-extrabold' 
-                                : 'text-slate-500 hover:text-obsidian-black'
-                            }`}
-                          >
-                            {period === 'all' ? 'Todos' : period === 'today' ? 'Hoje' : period === '7days' ? '7d' : '30d'}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    {/* Team Filter */}
-                    <div className="flex flex-col">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Equipe</label>
-                      <select
-                        value={selectedTeam || ''}
-                        onChange={(e) => setSelectedTeam(e.target.value || null)}
-                        className="text-xs py-2 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-electric-rose text-slate-700 font-medium cursor-pointer"
-                      >
-                        <option value="">Todas as Equipes</option>
-                        {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Analyst Filter */}
-                    <div className="flex flex-col">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Analista (Criador)</label>
-                      <select
-                        value={selectedAgent || ''}
-                        onChange={(e) => setSelectedAgent(e.target.value || null)}
-                        className="text-xs py-2 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-electric-rose text-slate-700 font-medium cursor-pointer"
-                      >
-                        <option value="">Todos os Analistas</option>
-                        {uniqueAgents.map(a => <option key={a} value={a}>{a}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Category Filter */}
-                    <div className="flex flex-col">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Motivo / Categoria</label>
-                      <select
-                        value={selectedCategory || ''}
-                        onChange={(e) => setSelectedCategory(e.target.value || null)}
-                        className="text-xs py-2 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-electric-rose text-slate-700 font-medium cursor-pointer"
-                      >
-                        <option value="">Todos os Motivos</option>
-                        {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
-                      </select>
-                    </div>
-
-                    {/* Criticidade Filter */}
-                    <div className="flex flex-col">
-                      <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Criticidade</label>
-                      <select
-                        value={selectedPriority || ''}
-                        onChange={(e) => setSelectedPriority(e.target.value || null)}
-                        className="text-xs py-2 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-electric-rose text-slate-700 font-medium cursor-pointer"
-                      >
-                        <option value="">Todas as Gravidades</option>
-                        <option value="Crítica">🚨 Crítica</option>
-                        <option value="Alta">⚠️ Alta</option>
-                        <option value="Média">🟡 Média</option>
-                        <option value="Baixa">🟢 Baixa</option>
-                        <option value="Dúvida">🔵 Dúvida</option>
-                      </select>
-                    </div>
-                  </div>
-
-                  {/* Toggle Advanced Filters Accordion */}
-                  <div className="pt-2">
-                    <button 
                       onClick={() => setShowAdvancedFilters(!showAdvancedFilters)}
-                      className="text-xs font-bold text-electric-rose flex items-center space-x-1 hover:underline cursor-pointer focus:outline-none"
+                      className={`flex items-center space-x-1.5 px-3.5 py-1.5 rounded-xl text-xs font-black transition-all cursor-pointer shadow-xs active:scale-95 border-2 ${
+                        showAdvancedFilters
+                          ? 'bg-[#FF0066] text-white border-[#FF0066] shadow-sm'
+                          : hasActiveFilters
+                          ? 'bg-slate-900 text-white dark:bg-white dark:text-slate-900 border-slate-900 dark:border-white font-black'
+                          : 'bg-slate-100 hover:bg-slate-200 dark:bg-slate-800 dark:hover:bg-slate-700 text-slate-800 dark:text-slate-200 border-slate-300 dark:border-slate-700'
+                      }`}
                     >
-                      <span>{showAdvancedFilters ? 'Ocultar Filtros Avançados' : 'Mais Opções de Filtros'}</span>
-                      <span className="text-[10px]">{showAdvancedFilters ? '▲' : '▼'}</span>
+                      <SlidersHorizontal className="w-3.5 h-3.5" />
+                      <span>{showAdvancedFilters ? 'MAIS FILTROS ▲' : 'MAIS FILTROS +'}</span>
+                      {totalActiveFiltersCount > 0 && !showAdvancedFilters && (
+                        <span className="px-1.5 py-0.2 rounded-full text-[10px] font-black bg-[#FF0066] text-white ml-0.5">
+                          {totalActiveFiltersCount}
+                        </span>
+                      )}
                     </button>
                   </div>
 
-                  {/* Advanced Filters Block */}
+                </div>
+
+                {/* Collapsible Panel for "MAIS FILTROS" */}
+                <AnimatePresence>
                   {showAdvancedFilters && (
-                    <motion.div 
-                      initial={{ height: 0, opacity: 0 }}
-                      animate={{ height: 'auto', opacity: 1 }}
-                      className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-4 gap-4 pt-3 border-t border-slate-100"
+                    <motion.div
+                      initial={{ opacity: 0, height: 0 }}
+                      animate={{ opacity: 1, height: 'auto' }}
+                      exit={{ opacity: 0, height: 0 }}
+                      transition={{ duration: 0.2 }}
+                      className="pt-3 border-t border-slate-100 dark:border-slate-800 space-y-4"
                     >
-                      {/* Search text */}
-                      <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Buscar por Cliente / Conteúdo</label>
-                        <div className="relative">
-                          <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-3.5 h-3.5 text-slate-400" />
-                          <input
-                            type="text"
-                            value={inputSearch}
-                            onChange={(e) => setInputSearch(e.target.value)}
-                            placeholder="Nome, telefone, motivo..."
-                            className="w-full text-xs pl-8 pr-3 py-2 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-electric-rose font-sans text-slate-700"
-                          />
+                      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4 bg-slate-50/90 dark:bg-slate-800/40 p-4 rounded-xl border border-slate-200/70 dark:border-slate-700/60">
+                        
+                        {/* Block 1: Assunto & Categoria */}
+                        <div className="space-y-2.5">
+                          <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1">
+                            <Tag className="w-3.5 h-3.5 text-[#FF0066]" />
+                            <span>Assunto / Motivo</span>
+                          </span>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Categoria do Chamado</label>
+                            <select
+                              value={selectedCategory || ''}
+                              onChange={(e) => setSelectedCategory(e.target.value || null)}
+                              className="w-full text-xs py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
+                            >
+                              <option value="">Todos os Assuntos (Geral)</option>
+                              {uniqueCategories.map(c => <option key={c} value={c}>{c}</option>)}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Status do Chamado</label>
+                            <select
+                              value={statusFilter}
+                              onChange={(e: any) => setStatusFilter(e.target.value)}
+                              className="w-full text-xs py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
+                            >
+                              <option value="all">Todos os Status</option>
+                              <option value="open">Em Aberto</option>
+                              <option value="resolved">Resolvido (Com Coluna K)</option>
+                            </select>
+                          </div>
                         </div>
+
+                        {/* Block 2: Período & Datas */}
+                        <div className="space-y-2.5">
+                          <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1">
+                            <Calendar className="w-3.5 h-3.5 text-[#FF0066]" />
+                            <span>Período & Datas</span>
+                          </span>
+
+                          {/* Quick Period Buttons */}
+                          <div className="grid grid-cols-4 bg-white dark:bg-slate-900 p-1 rounded-xl border border-slate-200 dark:border-slate-700">
+                            {(['all', 'today', '7days', '30days'] as const).map((period) => (
+                              <button
+                                key={period}
+                                onClick={() => {
+                                  setSelectedPeriod(period);
+                                  setSelectedMonth(null);
+                                  setSelectedDay(null);
+                                }}
+                                className={`py-1 text-[10px] font-bold rounded-lg transition-all cursor-pointer text-center ${
+                                  selectedPeriod === period && !selectedMonth && !selectedDay
+                                    ? 'bg-[#FF0066] text-white shadow-xs font-black' 
+                                    : 'text-slate-600 dark:text-slate-300 hover:text-slate-900'
+                                }`}
+                              >
+                                {period === 'all' ? 'Todos' : period === 'today' ? 'Hoje' : period === '7days' ? '7d' : '30d'}
+                              </button>
+                            ))}
+                          </div>
+
+                          <div className="grid grid-cols-2 gap-2">
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Mês</label>
+                              <select
+                                value={selectedMonth || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value || null;
+                                  setSelectedMonth(val);
+                                  if (val) {
+                                    setSelectedPeriod('all');
+                                    setSelectedDay(null);
+                                  }
+                                }}
+                                className="w-full text-xs py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
+                              >
+                                <option value="">Todos</option>
+                                {uniqueMonths.map(m => <option key={m} value={m}>{m}</option>)}
+                              </select>
+                            </div>
+
+                            <div>
+                              <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Dia</label>
+                              <input
+                                type="date"
+                                value={selectedDay || ''}
+                                onChange={(e) => {
+                                  const val = e.target.value || null;
+                                  setSelectedDay(val);
+                                  if (val) {
+                                    setSelectedMonth(null);
+                                    setSelectedPeriod('all');
+                                  }
+                                }}
+                                className="w-full text-xs py-1 px-1 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
+                              />
+                            </div>
+                          </div>
+                        </div>
+
+                        {/* Block 3: Equipe & Analista */}
+                        <div className="space-y-2.5">
+                          <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1">
+                            <Users className="w-3.5 h-3.5 text-[#FF0066]" />
+                            <span>Equipe & Analista</span>
+                          </span>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Equipe</label>
+                            <select
+                              value={selectedTeam || ''}
+                              onChange={(e) => setSelectedTeam(e.target.value || null)}
+                              className="w-full text-xs py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
+                            >
+                              <option value="">Todas as Equipes</option>
+                              {uniqueTeams.map(t => <option key={t} value={t}>{t}</option>)}
+                            </select>
+                          </div>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Analista (Criador)</label>
+                            <select
+                              value={selectedAgent || ''}
+                              onChange={(e) => setSelectedAgent(e.target.value || null)}
+                              className="w-full text-xs py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
+                            >
+                              <option value="">Todos os Analistas</option>
+                              {uniqueAgents.map(a => <option key={a} value={a}>{a}</option>)}
+                            </select>
+                          </div>
+                        </div>
+
+                        {/* Block 4: Gravidade & Busca */}
+                        <div className="space-y-2.5">
+                          <span className="text-[10px] font-black uppercase text-slate-400 dark:text-slate-500 tracking-wider flex items-center gap-1">
+                            <Search className="w-3.5 h-3.5 text-[#FF0066]" />
+                            <span>Gravidade & Busca</span>
+                          </span>
+
+                          <div>
+                            <label className="text-[10px] font-bold text-slate-500 dark:text-slate-400 block mb-0.5">Gravidade</label>
+                            <select
+                              value={selectedPriority || ''}
+                              onChange={(e) => setSelectedPriority(e.target.value || null)}
+                              className="w-full text-xs py-1.5 px-2 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 font-medium cursor-pointer"
+                            >
+                              <option value="">Todas as Gravidades</option>
+                              <option value="Crítica">🚨 Crítica</option>
+                              <option value="Alta">⚠️ Alta</option>
+                              <option value="Média">🟡 Média</option>
+                              <option value="Baixa">🟢 Baixa</option>
+                              <option value="Dúvida">🔵 Dúvida</option>
+                            </select>
+                          </div>
+
+                          <div>
+                            <input
+                              type="text"
+                              value={inputSearch}
+                              onChange={(e) => setInputSearch(e.target.value)}
+                              placeholder="Buscar cliente, tel, ID..."
+                              className="w-full text-xs py-1.5 px-2.5 bg-white dark:bg-slate-900 border border-slate-200 dark:border-slate-700 rounded-lg text-slate-700 dark:text-slate-200 focus:outline-none"
+                            />
+                          </div>
+
+                          <div className="flex flex-wrap gap-x-3 gap-y-1 pt-0.5">
+                            <label className="flex items-center space-x-1.5 text-[11px] font-semibold cursor-pointer text-slate-700 dark:text-slate-300">
+                              <input 
+                                type="checkbox"
+                                checked={showOnlyRecurring}
+                                onChange={(e) => setShowOnlyRecurring(e.target.checked)}
+                                className="w-3 h-3 rounded text-[#FF0066] accent-[#FF0066]"
+                              />
+                              <span>Reincidentes</span>
+                            </label>
+                            <label className="flex items-center space-x-1.5 text-[11px] font-semibold cursor-pointer text-slate-700 dark:text-slate-300">
+                              <input 
+                                type="checkbox"
+                                checked={showOnlyInputError}
+                                onChange={(e) => setShowOnlyInputError(e.target.checked)}
+                                className="w-3 h-3 rounded text-[#FF0066] accent-[#FF0066]"
+                              />
+                              <span>Erro Cadastro</span>
+                            </label>
+                            <label className="flex items-center space-x-1.5 text-[11px] font-semibold cursor-pointer text-slate-700 dark:text-slate-300">
+                              <input 
+                                type="checkbox"
+                                checked={showOnlyRoutingError}
+                                onChange={(e) => setShowOnlyRoutingError(e.target.checked)}
+                                className="w-3 h-3 rounded text-[#FF0066] accent-[#FF0066]"
+                              />
+                              <span>Erro Roteamento</span>
+                            </label>
+                          </div>
+                        </div>
+
                       </div>
 
-                      {/* Status Filter */}
-                      <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Status do Chamado</label>
-                        <select
-                          value={statusFilter}
-                          onChange={(e: any) => setStatusFilter(e.target.value)}
-                          className="text-xs py-2 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-electric-rose text-slate-700 font-medium cursor-pointer"
+                      {/* Bottom close / apply row */}
+                      <div className="flex items-center justify-between pt-1">
+                        <button
+                          onClick={handleResetFilters}
+                          className="text-xs font-bold text-slate-500 hover:text-[#FF0066] cursor-pointer"
                         >
-                          <option value="all">Todos os Status</option>
-                          <option value="open">Em Aberto</option>
-                          <option value="resolved">Resolvido (Com Coluna K)</option>
-                        </select>
-                      </div>
+                          Limpar todos os campos
+                        </button>
 
-                      {/* Filter Month */}
-                      <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Mês Específico (Histórico)</label>
-                        <select
-                          value={selectedMonth || ''}
-                          onChange={(e) => {
-                            const val = e.target.value || null;
-                            setSelectedMonth(val);
-                            if (val) {
-                              setSelectedPeriod('all');
-                              setSelectedDay(null);
-                            }
-                          }}
-                          className="text-xs py-2 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-electric-rose text-slate-700 font-medium cursor-pointer"
+                        <button
+                          onClick={() => setShowAdvancedFilters(false)}
+                          className="px-4 py-1.5 bg-slate-900 text-white dark:bg-white dark:text-slate-900 text-xs font-black rounded-xl cursor-pointer hover:opacity-90 shadow-xs"
                         >
-                          <option value="">Todos os Meses</option>
-                          {uniqueMonths.map(m => <option key={m} value={m}>{m}</option>)}
-                        </select>
-                      </div>
-
-                      {/* Specific Day Picker */}
-                      <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1 flex items-center gap-1"><Calendar className="w-3 h-3 text-slate-400" /> Dia Específico</label>
-                        <input
-                          type="date"
-                          value={selectedDay || ''}
-                          onChange={(e) => {
-                            const val = e.target.value || null;
-                            setSelectedDay(val);
-                            if (val) {
-                              setSelectedMonth(null);
-                              setSelectedPeriod('all');
-                            }
-                          }}
-                          className="text-xs py-1.5 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none focus:ring-1 focus:ring-electric-rose text-slate-700 font-medium cursor-pointer"
-                        />
-                      </div>
-
-                      {/* Start Date */}
-                      <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Data Inicial de Intervalo</label>
-                        <input
-                          type="date"
-                          value={startDate}
-                          onChange={(e) => setStartDate(e.target.value)}
-                          className="text-xs py-1.5 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
-                        />
-                      </div>
-
-                      {/* End Date */}
-                      <div className="flex flex-col">
-                        <label className="text-[10px] font-bold text-slate-400 uppercase tracking-wider mb-1">Data Final de Intervalo</label>
-                        <input
-                          type="date"
-                          value={endDate}
-                          onChange={(e) => setEndDate(e.target.value)}
-                          className="text-xs py-1.5 px-2.5 bg-slate-50 border border-slate-200 rounded-xl focus:outline-none"
-                        />
-                      </div>
-
-                      {/* Quick toggles */}
-                      <div className="col-span-1 sm:col-span-2 flex items-center gap-4 mt-4">
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <input 
-                            type="checkbox"
-                            checked={showOnlyRecurring}
-                            onChange={(e) => setShowOnlyRecurring(e.target.checked)}
-                            className="w-4 h-4 rounded text-electric-rose focus:ring-0 accent-electric-rose"
-                          />
-                          <span className="text-xs font-bold text-slate-700">Apenas Reincidentes</span>
-                        </label>
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <input 
-                            type="checkbox"
-                            checked={showOnlyInputError}
-                            onChange={(e) => setShowOnlyInputError(e.target.checked)}
-                            className="w-4 h-4 rounded text-electric-rose focus:ring-0 accent-electric-rose"
-                          />
-                          <span className="text-xs font-bold text-slate-700">Erro de Cadastro</span>
-                        </label>
-                        <label className="flex items-center space-x-2 cursor-pointer">
-                          <input 
-                            type="checkbox"
-                            checked={showOnlyRoutingError}
-                            onChange={(e) => setShowOnlyRoutingError(e.target.checked)}
-                            className="w-4 h-4 rounded text-electric-rose focus:ring-0 accent-electric-rose"
-                          />
-                          <span className="text-xs font-bold text-slate-700">Erro de Roteamento</span>
-                        </label>
+                          Fechar Painel
+                        </button>
                       </div>
                     </motion.div>
                   )}
-                </div>
-              )}
-
-              {/* Active Filters Display Chips */}
-              {hasActiveFilters && (
-                <div className="flex flex-wrap items-center gap-2 mt-2 pt-3 border-t border-slate-100">
-                  <span className="text-[10px] text-slate-400 font-bold uppercase tracking-wider">Filtros ativos:</span>
-                  {selectedTeam && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-slate-900 text-white rounded-md text-xs font-semibold">
-                      <span>Equipe: {selectedTeam}</span>
-                      <button onClick={() => setSelectedTeam(null)} className="ml-1.5 hover:text-electric-rose font-bold">×</button>
-                    </span>
-                  )}
-                  {selectedCategory && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-electric-rose text-white rounded-md text-xs font-semibold">
-                      <span>Assunto: {selectedCategory}</span>
-                      <button onClick={() => setSelectedCategory(null)} className="ml-1.5 hover:text-white/80 font-bold">×</button>
-                    </span>
-                  )}
-                  {selectedAgent && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-slate-900 text-white rounded-md text-xs font-semibold">
-                      <span>Analista: {selectedAgent}</span>
-                      <button onClick={() => setSelectedAgent(null)} className="ml-1.5 hover:text-electric-rose font-bold">×</button>
-                    </span>
-                  )}
-                  {selectedMonth && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-slate-900 text-white rounded-md text-xs font-semibold">
-                      <span>Mês: {selectedMonth}</span>
-                      <button onClick={() => setSelectedMonth(null)} className="ml-1.5 hover:text-electric-rose font-bold">×</button>
-                    </span>
-                  )}
-                  {selectedDay && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-slate-900 text-white rounded-md text-xs font-semibold">
-                      <span>Dia: {selectedDay}</span>
-                      <button onClick={() => setSelectedDay(null)} className="ml-1.5 hover:text-electric-rose font-bold">×</button>
-                    </span>
-                  )}
-                  {selectedPriority && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-slate-900 text-white rounded-md text-xs font-semibold">
-                      <span>Gravidade: {selectedPriority}</span>
-                      <button onClick={() => setSelectedPriority(null)} className="ml-1.5 hover:text-electric-rose font-bold">×</button>
-                    </span>
-                  )}
-                  {statusFilter !== 'all' && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-slate-900 text-white rounded-md text-xs font-semibold">
-                      <span>Status: {statusFilter === 'resolved' ? 'Resolvido' : 'Em Aberto'}</span>
-                      <button onClick={() => setStatusFilter('all')} className="ml-1.5 hover:text-electric-rose font-bold">×</button>
-                    </span>
-                  )}
-                  {showOnlyRecurring && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-amber-500 text-white rounded-md text-xs font-semibold">
-                      <span>Apenas Reincidentes</span>
-                      <button onClick={() => setShowOnlyRecurring(false)} className="ml-1.5 hover:text-white/80 font-bold">×</button>
-                    </span>
-                  )}
-                  {showOnlyInputError && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-red-500 text-white rounded-md text-xs font-semibold">
-                      <span>Apenas Erro de Cadastro</span>
-                      <button onClick={() => setShowOnlyInputError(false)} className="ml-1.5 hover:text-white/80 font-bold">×</button>
-                    </span>
-                  )}
-                  {showOnlyRoutingError && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-indigo-500 text-white rounded-md text-xs font-semibold">
-                      <span>Apenas Erro de Roteamento</span>
-                      <button onClick={() => setShowOnlyRoutingError(false)} className="ml-1.5 hover:text-white/80 font-bold">×</button>
-                    </span>
-                  )}
-                  {searchTerm && (
-                    <span className="inline-flex items-center px-2 py-0.5 bg-slate-900 text-white rounded-md text-xs font-semibold">
-                      <span>Busca: "{searchTerm}"</span>
-                      <button onClick={() => { setSearchTerm(''); setInputSearch(''); }} className="ml-1.5 hover:text-electric-rose font-bold">×</button>
-                    </span>
-                  )}
-                </div>
-              )}
-            </section>
+                </AnimatePresence>
+              </section>
             )}
 
             {/* TAB CONTENT SWITCHER */}
@@ -2112,6 +2196,23 @@ function DashboardApp() {
                   </section>
 
 
+                </motion.div>
+              ) : activeTab === 'team_overview' ? (
+                <motion.div
+                  key="team_overview"
+                  initial={{ opacity: 0, y: 15 }}
+                  animate={{ opacity: 1, y: 0 }}
+                  exit={{ opacity: 0, y: -15 }}
+                  transition={{ duration: 0.25 }}
+                >
+                  <TeamAnalystOverview
+                    tickets={enhancedTickets}
+                    onSelectAnalyst={(analystName) => {
+                      setSelectedAnalyst(analystName);
+                      setActiveTab('analyst');
+                    }}
+                    onSelectTicket={(ticket) => setSelectedTicketId(ticket.id)}
+                  />
                 </motion.div>
               ) : (
                 <motion.div

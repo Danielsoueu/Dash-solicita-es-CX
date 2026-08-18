@@ -21,6 +21,31 @@ const ai = new GoogleGenAI({
   }
 });
 
+// Server-side Google Sheets proxy to ensure reliable data sync without browser CORS or redirect issues
+const GOOGLE_SHEETS_CSV_URL = "https://docs.google.com/spreadsheets/d/e/2PACX-1vQ_X5Oc6ttxxwsMc4n0ywO1JrE7Eryi0-ubqaATPADMc5ZbxK8kYJfhS4kzPKWNsV6GjO82zzhVeQed/pub?gid=308255528&single=true&output=csv";
+
+app.get("/api/sheets", async (req, res) => {
+  try {
+    const response = await fetch(GOOGLE_SHEETS_CSV_URL, {
+      headers: {
+        "User-Agent": "CompanyHero-Data-Sync/1.0",
+      },
+    });
+
+    if (!response.ok) {
+      throw new Error(`Google Sheets responded with status: ${response.status}`);
+    }
+
+    const csvData = await response.text();
+    res.setHeader("Content-Type", "text/csv; charset=utf-8");
+    res.setHeader("Cache-Control", "no-cache, no-store, must-revalidate");
+    res.send(csvData);
+  } catch (error: any) {
+    console.error("Error fetching Google Sheets CSV on server:", error);
+    res.status(500).json({ error: "Erro ao carregar dados da planilha Google", details: error.message });
+  }
+});
+
 // Server-side AI Executive Summary endpoint
 app.post("/api/gemini/summary", async (req, res) => {
   try {

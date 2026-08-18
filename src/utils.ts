@@ -210,6 +210,100 @@ export function splitCSVToRows(csvText: string): string[] {
   return rows;
 }
 
+export function normalizeAnalystName(rawName: string | undefined): string {
+  if (!rawName) return 'Não identificado';
+  let name = rawName.trim();
+  if (name.startsWith('@')) {
+    name = name.substring(1).trim();
+  }
+  const indexAt = name.indexOf('@');
+  if (indexAt !== -1) {
+    name = name.substring(0, indexAt).trim();
+  }
+
+  const low = name.toLowerCase().normalize("NFD").replace(/[\u0300-\u036f]/g, "").trim();
+
+  // Explicit Nicknames and Dual Profile Merging Rules
+  if (low.includes('thamires') && (low.includes('alegre') || low.includes('porto') || low.includes('souza') || low.includes('santos'))) {
+    return 'Thamires Alegre';
+  }
+  if (low.includes('thamyris') || (low.includes('thamyris') && low.includes('alves'))) {
+    return 'Thamyris Alves';
+  }
+  if (low.includes('mona') || low.includes('monalisa') || low === 'moni') {
+    return 'Monalisa Lima';
+  }
+  if (low === 'bru' || low.includes('bruna cristina') || low === 'bruna') {
+    return 'Bruna Cristina';
+  }
+  if (low.includes('elizandra') || low.includes('cesario') || low === 'eli' || low.includes('(eli)')) {
+    return 'Elizandra Cesário';
+  }
+  if (low.includes('fabi') || low.includes('fabiana cruz') || low.includes('fabiana')) {
+    return 'Fabiana Cruz';
+  }
+  if (low === 'jess' || low.includes('jessica santos') || low.includes('jessica')) {
+    return 'Jessica Santos';
+  }
+  if (low.includes('babel') || low.includes('barbara belmonte') || (low.includes('barbara') && low.includes('oliveira'))) {
+    return 'Bárbara Belmonte';
+  }
+  if (low.includes('ana rodrigues') || low.includes('ana bia') || low.includes('ana beatriz')) {
+    return 'Ana Beatriz Rodrigues';
+  }
+  if (low.includes('michelle')) {
+    return 'Michelle de Freitas';
+  }
+  if (low.includes('iris') || low.includes('sarraf')) {
+    return 'Iris Sarraf';
+  }
+  if (low.includes('beatriz moreira')) {
+    return 'Beatriz Moreira';
+  }
+  if (low === 'sah' || low.includes('sarah dalta') || low.includes('sarah')) {
+    return 'Sarah Dalta';
+  }
+  if (low.includes('bianca') || low.includes('bianca dos santos')) {
+    return 'Bianca Sousa';
+  }
+  if (low.includes('isabela ferreira') || low.includes('(isa)') || low === 'isa') {
+    return 'Isabela Ferreira';
+  }
+  if (low.includes('tiago paulo') || low.includes('thiago paulo')) {
+    return 'Tiago Paulo';
+  }
+  if (low.includes('kenia') || low.includes('parreira')) {
+    return 'Kenia Parreira';
+  }
+  if (low.includes('daniel') && low.includes('melo')) {
+    return 'Daniel Melo';
+  }
+  if (low.includes('nadia') || low.includes('fernanda')) {
+    return 'Nadia Fernanda';
+  }
+  if (low.includes('ynahra')) {
+    return 'Ynahra Oliveira';
+  }
+  if (low.includes('karina')) {
+    return 'Karina Moreno';
+  }
+  if (low.includes('thiago silva')) {
+    return 'Thiago Silva';
+  }
+  if (low.includes('didiane')) {
+    return 'Didiane Almeida';
+  }
+  if (low.includes('guilherme')) {
+    return 'Guilherme Alves';
+  }
+  if (low.includes('joao sampaio') || low.includes('joão sampaio')) {
+    return 'João Sampaio';
+  }
+
+  // Generic fallback: format casing
+  return name.split(/[\._\s]+/).map(part => part.charAt(0).toUpperCase() + part.slice(1)).join(' ');
+}
+
 export function parseGoogleSheetsCSV(csvText: string): Ticket[] {
   const lines = splitCSVToRows(csvText);
   if (lines.length < 2) return [];
@@ -262,7 +356,7 @@ export function parseGoogleSheetsCSV(csvText: string): Ticket[] {
 
     const description = cells[5] || '';
     const arquivos = cells[6] || '';
-    const agentName = cells[7] || 'Suporte';
+    const agentName = normalizeAnalystName(cells[7]);
     const rawDate = cells[8] || '';
     const columnKValue = cells[10] || '';
     

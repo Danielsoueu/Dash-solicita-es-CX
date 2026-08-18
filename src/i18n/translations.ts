@@ -25,7 +25,8 @@ export const translations: Record<Language, Record<string, string>> = {
 
     // Navigation
     'nav.executiveDashboard': 'Painel Executivo',
-    'nav.analystPerformance': 'Performance de Analistas',
+    'nav.teamOverview': 'Painel Geral por Analista',
+    'nav.analystPerformance': 'Ficha do Analista',
     'nav.userManagement': 'Gestão de Usuários',
     'nav.logout': 'Sair',
     'nav.profile': 'Meu Perfil',
@@ -92,7 +93,8 @@ export const translations: Record<Language, Record<string, string>> = {
 
     // Navigation
     'nav.executiveDashboard': 'Executive Dashboard',
-    'nav.analystPerformance': 'Analyst Performance',
+    'nav.teamOverview': 'Team Analysts Overview',
+    'nav.analystPerformance': 'Analyst Detail',
     'nav.userManagement': 'User Management',
     'nav.logout': 'Sign Out',
     'nav.profile': 'My Profile',
@@ -158,7 +160,8 @@ export const translations: Record<Language, Record<string, string>> = {
 
     // Navigation
     'nav.executiveDashboard': 'Panel Ejecutivo',
-    'nav.analystPerformance': 'Rendimiento de Analistas',
+    'nav.teamOverview': 'Panel General por Analista',
+    'nav.analystPerformance': 'Ficha del Analista',
     'nav.userManagement': 'Gestión de Usuarios',
     'nav.logout': 'Cerrar Sesión',
     'nav.profile': 'Mi Perfil',

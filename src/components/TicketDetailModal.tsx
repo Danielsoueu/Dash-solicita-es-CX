@@ -6,6 +6,7 @@
 import React from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Ticket } from '../types';
+import { normalizeAnalystName } from '../utils';
 import { X, Calendar, User, Phone, ExternalLink, Briefcase, Paperclip, AlertCircle, Shuffle, CheckCircle2 } from 'lucide-react';
 
 interface TicketDetailModalProps {
@@ -37,15 +38,7 @@ export default function TicketDetailModal({
   };
 
   const formatAgentName = (rawName: string | undefined): string => {
-    if (!rawName) return '';
-    let name = rawName.trim();
-    if (name.startsWith('@')) {
-      name = name.slice(1);
-    }
-    if (name.includes('@')) {
-      name = name.split('@')[0];
-    }
-    return name.trim();
+    return normalizeAnalystName(rawName);
   };
 
   return (
