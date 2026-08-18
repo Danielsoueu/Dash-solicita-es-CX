@@ -230,17 +230,38 @@ function DashboardApp() {
         inputErrorDetails.push('Nome');
       }
 
-      // -- Perfil do Cliente verification
-      let isIuguError = false;
-      if (!ticket.iuguUrl || ticket.iuguUrl.trim() === '' || ticket.iuguUrl.toLowerCase().includes('não informado') || ticket.iuguUrl.toLowerCase().includes('sem link')) {
-        isIuguError = true;
+      // -- Perfil do Cliente verification (IUGU, HubSpot, Intranet, Hero, CompanyHero, Hero-OS, Vercel, Vindi, etc.)
+      let isProfileLinkError = false;
+      const rawLink = (ticket.iuguUrl || '').trim();
+      const urlLower = rawLink.toLowerCase();
+
+      const invalidPlaceholders = [
+        'não informado', 'nao informado', 'sem link', 'sem acesso', 
+        'não encontrado', 'nao localizado', 'sem iugu', 'nao tem', 'não tem'
+      ];
+      
+      const isExplicitPlaceholderOnly = invalidPlaceholders.some(p => urlLower === p || urlLower === `- ${p} -` || urlLower === `(${p})`);
+
+      if (!rawLink || isExplicitPlaceholderOnly) {
+        isProfileLinkError = true;
       } else {
-        const urlLower = ticket.iuguUrl.toLowerCase();
-        if (!urlLower.includes('iugu') && !urlLower.includes('intranet') && !urlLower.includes('hero-os') && !urlLower.includes('heroos')) {
-          isIuguError = true;
+        // Accepts all links from HubSpot, IUGU, Intranet, Hero (Hero-OS, CompanyHero), Vercel, Vindi, or valid HTTP/HTTPS URLs
+        const hasValidPlatformOrUrl = 
+          urlLower.includes('hubspot') ||
+          urlLower.includes('iugu') ||
+          urlLower.includes('intranet') ||
+          urlLower.includes('hero') ||
+          urlLower.includes('vercel') ||
+          urlLower.includes('vindi') ||
+          urlLower.includes('companyhero') ||
+          urlLower.includes('http://') ||
+          urlLower.includes('https://');
+
+        if (!hasValidPlatformOrUrl) {
+          isProfileLinkError = true;
         }
       }
-      if (isIuguError) {
+      if (isProfileLinkError) {
         inputErrorDetails.push('Perfil do Cliente');
       }
 

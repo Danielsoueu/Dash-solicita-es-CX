@@ -155,19 +155,32 @@ export default function TicketDetailModal({
                     </div>
                   )}
 
-                  {ticket.iuguUrl && (
-                    <div className="pt-1">
-                      <a 
-                        href={ticket.iuguUrl} 
-                        target="_blank" 
-                        rel="noreferrer"
-                        className="inline-flex items-center space-x-1.5 text-xs text-electric-rose hover:underline font-bold bg-electric-rose/5 px-3 py-1.5 rounded-lg border border-electric-rose/10"
-                      >
-                        <ExternalLink className="w-3.5 h-3.5" />
-                        <span>Ver Perfil do Cliente</span>
-                      </a>
-                    </div>
-                  )}
+                  {ticket.iuguUrl && (() => {
+                    const raw = ticket.iuguUrl.trim();
+                    const match = raw.match(/https?:\/\/[^\s,]+/i);
+                    const href = match ? match[0] : (raw.startsWith('http') ? raw : `https://${raw.replace(/^\/+/, '')}`);
+                    const lower = raw.toLowerCase();
+                    let label = 'Ver Perfil do Cliente';
+                    if (lower.includes('hubspot')) label = 'Ver no HubSpot';
+                    else if (lower.includes('hero')) label = 'Ver no Hero-OS';
+                    else if (lower.includes('iugu')) label = 'Ver no IUGU';
+                    else if (lower.includes('intranet')) label = 'Ver na Intranet';
+                    else if (lower.includes('vercel')) label = 'Ver no Vercel';
+
+                    return (
+                      <div className="pt-1">
+                        <a 
+                          href={href} 
+                          target="_blank" 
+                          rel="noreferrer"
+                          className="inline-flex items-center space-x-1.5 text-xs text-electric-rose hover:underline font-bold bg-electric-rose/5 px-3 py-1.5 rounded-lg border border-electric-rose/10 transition-colors hover:bg-electric-rose/10"
+                        >
+                          <ExternalLink className="w-3.5 h-3.5" />
+                          <span>{label}</span>
+                        </a>
+                      </div>
+                    );
+                  })()}
                 </div>
               </div>
 
